@@ -1202,7 +1202,7 @@ async def pdfa_to_pdf_upload(request: Request, file: UploadFile = File(...)):
 @router.post("/convert-to-pdf/pdfa-to-pdf/process")
 async def pdfa_to_pdf_process(request_id: str = Form(...), filename: str = Form(...)):
     try:
-        result = await pdf_to_pdfa_service.process(request_id=request_id, filename=filename)
+        result = await pdf_to_pdfa_service.process(request_id=request_id, filenames=[filename])
         return make_download_resp(request_id, result, f"{Path(filename).stem}_pdfa.pdf")
     except HTTPException:
         raise
