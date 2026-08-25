@@ -222,7 +222,8 @@ async def compress_pdf(
 async def rotate_pdf(
     request: Request,
     file: UploadFile = File(..., description="PDF to rotate"),
-    rotations: str = Form(..., description="JSON string mapping page index to rotation degrees"),
+    rotation: int = Form(90, description="Rotation angle in degrees"),
+    pages: str = Form("all", description="Pages to apply rotation to ('all', 'odd', 'even', or '1,3,5-7')"),
 ) -> RotatePDFResponse:
     """Rotate a PDF."""
     request_id: str = request.state.request_id
@@ -231,7 +232,8 @@ async def rotate_pdf(
         saved = await _save_uploads([file], request_id)
         result = await _rotate_service.rotate(
             input_pdf=saved[0],
-            rotations_json=rotations,
+            rotation=rotation,
+            pages=pages,
             request_id=request_id,
         )
         return result
