@@ -12,13 +12,13 @@ export default function OrganizePDFPage() {
 
 'use strict';
 
-const PAGE_CONFIG = {
+var PAGE_CONFIG = {
     endpoint: '/api/organize_pdf_services/organizepdf',
     acceptedTypes: ['application/pdf'],
     maxFileSizeMB: 100,
 };
 
-let state = {
+var state = {
     files: [],
     isProcessing: false,
 };
