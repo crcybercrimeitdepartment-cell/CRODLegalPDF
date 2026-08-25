@@ -11,6 +11,7 @@ from fastapi.concurrency import run_in_threadpool
 from app.core.paths import Paths
 from app.utils.file_handler import save_upload
 
+from app.Convert_to_pdf_services.Pdf_to_pdfa_service import pdf_to_pdfa_service
 from app.Convert_to_pdf_services.bmp_to_pdf_service import bmp_to_pdf_service
 from app.Convert_to_pdf_services.csv_to_pdf_service import csv_to_pdf_service
 from app.Convert_to_pdf_services.email_to_pdf_service import email_to_pdf_service
@@ -1184,5 +1185,28 @@ async def zip_to_pdf_process(request_id: str = Form(...), filename: str = Form(.
         raise
     except Exception as e:
         logger.error(f"zip-to-pdf error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── PDF to PDFA ─────────────────────────────────────────────────────────────
+
+@router.post("/convert-to-pdf/pdfa-to-pdf/upload")
+async def pdfa_to_pdf_upload(request: Request, file: UploadFile = File(...)):
+    request_id = request.state.request_id
+    if not file.filename: raise HTTPException(status_code=400, detail="No filename provided.")
+    upload_dir = Paths.request_upload(request_id)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    await save_upload(file.file, upload_dir / file.filename)
+    return {"success": True, "request_id": request_id, "filename": file.filename}
+
+@router.post("/convert-to-pdf/pdfa-to-pdf/process")
+async def pdfa_to_pdf_process(request_id: str = Form(...), filename: str = Form(...)):
+    try:
+        result = await pdf_to_pdfa_service.process(request_id=request_id, filename=filename)
+        return make_download_resp(request_id, result, f"{Path(filename).stem}_pdfa.pdf")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"pdfa-to-pdf error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
