@@ -19,6 +19,7 @@ export default function RotatePDFPage() {
   const [rotation, setRotation] = useState(90);
   const [pages, setPages] = useState('all');
   const [customPages, setCustomPages] = useState('');
+  const [previewUrl, setPreviewUrl] = useState(null);
   const fileInputRef = useRef(null);
 
   const handleDragOver = (e) => { e.preventDefault(); setIsDragOver(true); };
@@ -29,11 +30,16 @@ export default function RotatePDFPage() {
   };
   const handleFiles = (fileList) => {
     const valid = Array.from(fileList).filter(f => f.type === 'application/pdf');
-    if (valid.length > 0) setFiles([valid[0]]);
+    if (valid.length > 0) {
+      setFiles([valid[0]]);
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(URL.createObjectURL(valid[0]));
+    }
   };
   const removeFile = () => {
     setFiles([]); setIsSuccess(false); setIsProcessing(false);
     setDownloadUrl(null); setErrorMsg(null);
+    if (previewUrl) { URL.revokeObjectURL(previewUrl); setPreviewUrl(null); }
   };
 
   const handleProcess = async () => {
@@ -126,6 +132,17 @@ export default function RotatePDFPage() {
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
                 </div>
+
+                {previewUrl && (
+                  <div className="mt-4 w-full h-80 sm:h-96 border border-slate-200 rounded-xl overflow-hidden bg-slate-50 relative group">
+                    <iframe 
+                      src={`${previewUrl}#toolbar=0&navpanes=0`} 
+                      className="w-full h-full"
+                      title="PDF Preview"
+                    />
+                    <div className="absolute top-2 right-2 bg-slate-900/70 text-white text-[10px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity">Preview</div>
+                  </div>
+                )}
 
                 <div className="mt-6 space-y-5">
                   <div>
