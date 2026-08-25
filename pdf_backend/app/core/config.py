@@ -160,6 +160,7 @@ class Settings(BaseSettings):
             "http://localhost:8000",
             "http://127.0.0.1:8000",
             "https://crod-legal-pdf.vercel.app",
+            "https://crod-legal-pdf-git-main-crccf.vercel.app",
         ],
         description="Allowed CORS origins",
     )
