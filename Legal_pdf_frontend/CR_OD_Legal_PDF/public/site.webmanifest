@@ -1,0 +1,22 @@
+{
+  "name": "CR OD Legal PDF Platform",
+  "short_name": "CR OD PDF",
+  "description": "One Secure Platform for Smarter, Faster PDF Management. Merge, Convert, Compress, Edit, Sign, Protect, and Redact PDF files online for free.",
+  "icons": [
+    {
+      "src": "https://res.cloudinary.com/dlhmkbijh/image/upload/v1785473491/LegalPDFLogo_uzgtsd.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://res.cloudinary.com/dlhmkbijh/image/upload/v1785473491/LegalPDFLogo_uzgtsd.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "theme_color": "#e2ead8",
+  "background_color": "#F8FAF9",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait"
+}

@@ -1,0 +1,21 @@
+[
+  {
+    "event_id": "2898a732-c838-4682-8d6f-cd3c5656aab8",
+    "event_type": "Copyright Registration",
+    "timestamp": "2026-08-25T06:27:22.535670+00:00",
+    "document_name": "Smoke Test | 2026 \u2014 Copyright Registration",
+    "document_hash": "477cf9a525cfbca4e142026d08d3da6574ba791aff12c93e217fb860e784b30b",
+    "author": "Smoke Author",
+    "creator": "Calc",
+    "description": "Copyright registered to owner: Smoke Test",
+    "previous_value": null,
+    "new_value": {
+      "owner": "Smoke Test",
+      "author": "Smoke Author",
+      "reg_id": "CR-2026-42385"
+    },
+    "action_result": "success",
+    "source": "Copyright Registration Service",
+    "user_info": "Application user"
+  }
+]

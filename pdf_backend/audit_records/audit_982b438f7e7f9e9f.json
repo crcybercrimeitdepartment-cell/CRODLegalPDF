@@ -1,0 +1,21 @@
+[
+  {
+    "event_id": "1e5fc258-8040-447a-9995-497da485a38f",
+    "event_type": "Copyright Registration",
+    "timestamp": "2026-08-24T05:41:38.852106+00:00",
+    "document_name": "dfghjkl | 2026 \u2014 Copyright Registration",
+    "document_hash": "982b438f7e7f9e9f4883cd23f8755c8673aa3ef55a713908b8cc9c9c037b28c4",
+    "author": "dfghjk",
+    "creator": "erthjk",
+    "description": "Copyright registered to owner: dfghjkl",
+    "previous_value": null,
+    "new_value": {
+      "owner": "dfghjkl",
+      "author": "dfghjk",
+      "reg_id": "CR-2026-98565"
+    },
+    "action_result": "success",
+    "source": "Copyright Registration Service",
+    "user_info": "Application user"
+  }
+]

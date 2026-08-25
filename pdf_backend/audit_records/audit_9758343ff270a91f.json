@@ -1,0 +1,21 @@
+[
+  {
+    "event_id": "acd9434d-7851-420f-ad25-1f87ade5fc1c",
+    "event_type": "Copyright Registration",
+    "timestamp": "2026-08-24T05:52:00.237140+00:00",
+    "document_name": "sdfghjk | 2025 \u2014 Copyright Registration",
+    "document_hash": "9758343ff270a91f1b51435106f157321b23eaa4ec402707d43ed704676f2412",
+    "author": "qwertyu",
+    "creator": "dfghjkl",
+    "description": "Copyright registered to owner: sdfghjk",
+    "previous_value": null,
+    "new_value": {
+      "owner": "sdfghjk",
+      "author": "qwertyu",
+      "reg_id": "CR-2026-20029"
+    },
+    "action_result": "success",
+    "source": "Copyright Registration Service",
+    "user_info": "Application user"
+  }
+]

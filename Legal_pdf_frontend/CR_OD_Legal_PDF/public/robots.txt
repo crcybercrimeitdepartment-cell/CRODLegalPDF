@@ -1,0 +1,26 @@
+# Robots.txt for CR OD Legal PDF Platform
+# Optimized for Googlebot, Bingbot, and AI Search Crawlers (ChatGPT, Gemini, Perplexity)
+
+User-agent: *
+Allow: /
+Disallow: /tmp/
+Disallow: /*?*query=
+
+# Dedicated AI Search Crawler Rules
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+# Sitemap Index
+Sitemap: https://crodlegalpdf.com/sitemap.xml

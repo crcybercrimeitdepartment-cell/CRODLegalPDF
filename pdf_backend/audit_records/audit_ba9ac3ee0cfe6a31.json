@@ -1,0 +1,20 @@
+[
+  {
+    "event_id": "9b6dad47-ef15-4d19-8b01-88ca2280d61a",
+    "event_type": "Invisible Watermark Embedded",
+    "timestamp": "2026-08-24T05:53:53.809152+00:00",
+    "document_name": "Untitled",
+    "document_hash": "ba9ac3ee0cfe6a31d8f31238ca3e58e948e283d98cedef5699a09110e0a43f0c",
+    "author": "sdfg",
+    "creator": "",
+    "description": "Embedded invisible watermark for owner: sdfg",
+    "previous_value": null,
+    "new_value": {
+      "owner": "sdfg",
+      "fingerprint": "2ab9a951a8236ca53de133955bdc08c18ef72eac4fbdd6bc56d5f159d758003c"
+    },
+    "action_result": "success",
+    "source": "Invisible Watermark Service",
+    "user_info": "Application user"
+  }
+]
