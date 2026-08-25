@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 
-const API_BASE_URL = 'http://127.0.0.1:8002';
+const API_BASE_URL = (import.meta.env.VITE_BACKEND_URL || 'https://cr-od-legal-pdf-backend.onrender.com');
 
 export default function ScantoPDFPage() {
   const [imageFiles, setImageFiles] = useState([]);

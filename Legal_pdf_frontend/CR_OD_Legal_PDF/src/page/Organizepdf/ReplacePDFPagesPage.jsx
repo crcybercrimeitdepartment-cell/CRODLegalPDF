@@ -92,7 +92,7 @@ export default function ReplacePDFPagesPage() {
         setIsProcessing(true);
         
         try {
-            const API_BASE_URL = 'http://127.0.0.1:8002'; // Adjust if needed
+            const API_BASE_URL = (import.meta.env.VITE_BACKEND_URL || 'https://cr-od-legal-pdf-backend.onrender.com'); // Adjust if needed
             
             // 1. Upload original
             const uploadForm = new FormData();
