@@ -144,9 +144,9 @@ export default function ToolWorkspace({ tool, onBack }) {
   };
 
   return (
-    <div className="flex-1 flex flex-col w-full relative z-20 min-h-screen">
-      <div className="w-full max-w-[1200px] mx-auto px-4 sm:px-6 md:px-10 pt-1 sm:pt-5">
-        <button onClick={onBack} className="inline-flex items-center gap-2 bg-white text-[#1e2a52] font-bold px-4 py-2 rounded-full shadow-sm border border-slate-200 hover:shadow-md hover:scale-105 transition-all cursor-pointer text-xs sm:text-sm">
+    <div className="flex-1 flex flex-col w-full relative z-20 min-h-screen bg-transparent">
+      <div className="w-full max-w-[1200px] mx-auto px-4 sm:px-6 md:px-10 pt-4 sm:pt-8 pb-4 relative z-30 flex-none text-left">
+        <button onClick={onBack} className="inline-flex items-center gap-2 bg-white text-[#1e2a52] font-bold px-4 py-2 rounded-full shadow-md border border-slate-200 hover:shadow-lg hover:scale-105 transition-all cursor-pointer text-xs sm:text-sm">
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
       </div>

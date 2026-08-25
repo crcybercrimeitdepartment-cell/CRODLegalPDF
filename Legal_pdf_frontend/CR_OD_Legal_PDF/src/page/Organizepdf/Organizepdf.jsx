@@ -750,11 +750,11 @@ export default function OrganizepdfPage({ onBack, searchQuery = "" }) {
     const Component = componentMap[selectedTool.id];
     if (Component) {
       return (
-        <div className="flex-1 flex flex-col w-full relative z-20 min-h-screen pb-20">
-          <div className="w-full max-w-[1200px] mx-auto px-4 sm:px-6 md:px-10 pt-1 sm:pt-5 pb-4">
+        <div className="flex-1 flex flex-col w-full relative z-20 min-h-screen pb-20 bg-transparent">
+          <div className="w-full max-w-[1200px] mx-auto px-4 sm:px-6 md:px-10 pt-4 sm:pt-8 pb-4 relative z-30 flex-none">
             <button
               onClick={() => { setSelectedTool(null); const parentHash = window.location.hash.split('/')[0]; window.history.pushState({ page: parentHash.replace('#', '') }, '', parentHash); window.scrollTo(0, 0); }}
-              className="inline-flex items-center gap-2 bg-white text-[#1e2a52] font-bold px-4 py-2 rounded-full shadow-sm border border-slate-200 hover:shadow-md hover:scale-105 transition-all cursor-pointer text-xs sm:text-sm"
+              className="inline-flex items-center gap-2 bg-white text-[#1e2a52] font-bold px-4 py-2 rounded-full shadow-md border border-slate-200 hover:shadow-lg hover:scale-105 transition-all cursor-pointer text-xs sm:text-sm"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
@@ -762,7 +762,9 @@ export default function OrganizepdfPage({ onBack, searchQuery = "" }) {
               Back to Tools
             </button>
           </div>
-          <div className="w-full max-w-[1200px] mx-auto px-4 sm:px-6 md:px-10 w-full-container"><Component tool={selectedTool} /></div>
+          <div className="w-full max-w-[1200px] mx-auto px-4 sm:px-6 md:px-10 w-full-container relative z-20 flex-1">
+            <Component tool={selectedTool} />
+          </div>
         </div>
       );
     }

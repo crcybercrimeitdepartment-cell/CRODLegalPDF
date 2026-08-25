@@ -50,7 +50,17 @@ export default function RotatePDFPage() {
         const response = await fetch(`${API_BASE_URL}/api/pdf/rotate`, { method: 'POST', body: formData });
         if (!response.ok) {
           const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.detail || `Server error: ${response.status}`);
+          let errorMessage = `Server error: ${response.status}`;
+          if (errData.detail) {
+            if (typeof errData.detail === 'string') {
+              errorMessage = errData.detail;
+            } else if (Array.isArray(errData.detail)) {
+              errorMessage = errData.detail.map(e => `${e.loc.join('.')}: ${e.msg}`).join(', ');
+            } else {
+              errorMessage = JSON.stringify(errData.detail);
+            }
+          }
+          throw new Error(errorMessage);
         }
         const contentType = response.headers.get('content-type') || '';
         let dlUrl;
