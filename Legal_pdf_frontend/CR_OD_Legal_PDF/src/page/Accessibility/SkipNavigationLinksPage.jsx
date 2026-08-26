@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback } from 'react';
 import { BackgroundWatermark } from '../../components/crodlegalpdf';
 import { ArrowLeft, Upload, Flag, Tag, Link2, Shield, Download, CheckCircle2 } from 'lucide-react';
 
-var API_BASE = (import.meta.env.VITE_API_URL || '') + '/api/accessibility';
+var API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '') + '/api/accessibility';
 
 export default function SkipNavigationLinksPage({ onBack }) {
   var [documentId, setDocumentId] = useState(null);

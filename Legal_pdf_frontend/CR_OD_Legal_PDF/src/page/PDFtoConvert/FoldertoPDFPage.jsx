@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Upload, FileText, Download, CheckCircle2, ArrowLeft, X, AlertCircle, Eye } from 'lucide-react';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '';
 
 export default function FoldertoPDFPage({ onBack }) {
   const toolName = "Folder to PDF";

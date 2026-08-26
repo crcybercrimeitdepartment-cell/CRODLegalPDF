@@ -4,12 +4,18 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 export default function ReorderBookmarksAfterPageChangesPage() {
   const [file, setFile] = useState(null);
+  
+  // Options
+  const [mappingText, setMappingText] = useState('1:2, 2:1');
+  const [preserveHierarchy, setPreserveHierarchy] = useState(true);
+  const [preserveMetadata, setPreserveMetadata] = useState(true);
+
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDone, setIsDone] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
   const [downloadUrl, setDownloadUrl] = useState(null);
   const [isDragOver, setIsDragOver] = useState(false);
-  
+  const [previewUrl, setPreviewUrl] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
 
   const fileInputRef = useRef(null);
@@ -18,6 +24,8 @@ export default function ReorderBookmarksAfterPageChangesPage() {
     if (f && f.type === 'application/pdf') {
       setFile(f);
       setErrorMsg(null);
+      const blob = new Blob([f], { type: 'application/pdf' });
+      setPreviewUrl(URL.createObjectURL(blob));
     } else {
       setErrorMsg('Please upload a valid PDF file.');
     }
@@ -43,22 +51,21 @@ export default function ReorderBookmarksAfterPageChangesPage() {
     setIsDone(false);
 
     try {
-      // 1. Upload
-      const uploadForm = new FormData();
-      uploadForm.append('file', file);
-
-      const uploadRes = await fetch(`${API_BASE_URL}/api/pdf/reorder-bookmarks/upload`, {
-        method: 'POST',
-        body: uploadForm,
+      const mappingObj = {};
+      mappingText.split(',').forEach(pair => {
+         const [k, v] = pair.split(':').map(s => s.trim());
+         if(k && v) mappingObj[k] = parseInt(v, 10);
       });
 
-      if (!uploadRes.ok) throw new Error('Upload failed.');
-      const uploadData = await uploadRes.json();
-      
-      // 2. Process
+      if (Object.keys(mappingObj).length === 0) {
+          throw new Error("Please provide a valid mapping (e.g. 1:2, 2:1)");
+      }
+
       const processForm = new FormData();
-      processForm.append('request_id', uploadData.request_id);
-      processForm.append('filename', uploadData.filename);
+      processForm.append('file', file);
+      processForm.append('page_mapping', JSON.stringify(mappingObj));
+      processForm.append('preserve_hierarchy', preserveHierarchy);
+      processForm.append('preserve_metadata', preserveMetadata);
 
       const processRes = await fetch(`${API_BASE_URL}/api/pdf/reorder-bookmarks/process`, {
         method: 'POST',
@@ -66,18 +73,22 @@ export default function ReorderBookmarksAfterPageChangesPage() {
       });
 
       if (!processRes.ok) {
-        const err = await processRes.json().catch(() => ({}));
-        throw new Error(err.detail || `Processing failed (${processRes.status})`);
+        let errDesc = `Processing failed (${processRes.status})`;
+        try {
+          const err = await processRes.json();
+          errDesc = err.detail || errDesc;
+        } catch (_) {}
+        throw new Error(errDesc);
       }
 
       const processData = await processRes.json();
-      const dlUrl = processData.download_url;
-      if (!dlUrl) throw new Error('Download URL not provided by server.');
+      if (!processData.request_id || !processData.filename) {
+          throw new Error('Download details not provided by server.');
+      }
+      const dlUrl = `/api/pdf/reorder-bookmarks/download/${processData.request_id}/${processData.filename}`;
 
-      // 3. Prepare Download
       setDownloadUrl(`${API_BASE_URL}${dlUrl}`);
       setIsDone(true);
-      setShowPreview(true);
     } catch (err) {
       setErrorMsg(err.message || 'An unexpected error occurred.');
     } finally {
@@ -91,6 +102,7 @@ export default function ReorderBookmarksAfterPageChangesPage() {
     setIsDone(false);
     setErrorMsg(null);
     setDownloadUrl(null);
+    setPreviewUrl(null);
     setShowPreview(false);
   };
 
@@ -99,7 +111,7 @@ export default function ReorderBookmarksAfterPageChangesPage() {
       <div className="w-full max-w-4xl relative z-10">
         <div className="text-center max-w-2xl mx-auto mt-4 mb-8 px-4">
           <h1 className="text-3xl font-black text-[#1e2a52]">Reorder Bookmarks</h1>
-          <p className="text-sm text-slate-600 mt-2">Process your PDF using our advanced tools.</p>
+          <p className="text-sm text-slate-600 mt-2">Update bookmark destinations after page changes.</p>
         </div>
 
         {!isProcessing && !isDone && (
@@ -128,6 +140,30 @@ export default function ReorderBookmarksAfterPageChangesPage() {
                 {file ? file.name : 'Drag & Drop your PDF here'}
               </p>
             </div>
+
+            {file && (
+              <div className="mt-8 space-y-4 text-left bg-slate-50 p-6 rounded-xl border border-slate-200">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Page Mapping (Old:New)</label>
+                  <input type="text" className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" value={mappingText} onChange={e => setMappingText(e.target.value)} placeholder="e.g. 1:2, 2:1" />
+                  <p className="text-xs text-slate-500 mt-1">Specify how old pages map to new pages, separated by commas.</p>
+                </div>
+                
+                <label className="flex items-start gap-3 p-3 bg-white border border-slate-200 rounded-xl cursor-pointer hover:bg-indigo-50/50">
+                    <input type="checkbox" className="mt-1 w-4 h-4 text-indigo-600 rounded border-slate-300" checked={preserveHierarchy} onChange={(e) => setPreserveHierarchy(e.target.checked)} />
+                    <div>
+                      <strong className="block text-sm font-semibold text-slate-700">Preserve Hierarchy</strong>
+                      <span className="block text-xs text-slate-500 mt-0.5">Keep nested bookmark structures intact.</span>
+                    </div>
+                </label>
+              </div>
+            )}
+
+            {file && previewUrl && (
+              <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50/50 overflow-hidden h-[400px] shadow-inner w-full">
+                  <iframe src={`${previewUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`} className="w-full h-full border-none" title="PDF Preview" />
+              </div>
+            )}
 
             <div className="text-center mt-8">
               <button

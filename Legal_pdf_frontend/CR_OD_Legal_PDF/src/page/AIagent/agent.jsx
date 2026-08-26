@@ -2341,11 +2341,13 @@ const WIDGET_CSS = `
     display: flex; flex-direction: column; overflow: hidden;
     border: 1px solid rgba(30,42,82,0.1);
     transform-origin: bottom right;
-    transition: opacity 0.22s cubic-bezier(0.16,1,0.3,1), transform 0.22s cubic-bezier(0.16,1,0.3,1);
+    transition: opacity 0.22s cubic-bezier(0.16,1,0.3,1), transform 0.22s cubic-bezier(0.16,1,0.3,1), visibility 0.22s cubic-bezier(0.16,1,0.3,1);
     overscroll-behavior: contain;
+    /* Default to closed state to prevent mount animation glitch */
+    opacity: 0; transform: scale(0.88) translateY(16px); pointer-events: none; visibility: hidden;
   }
-  .aw-panel--closed { opacity: 0; transform: scale(0.88) translateY(16px); pointer-events: none; }
-  .aw-panel--open { opacity: 1; transform: scale(1) translateY(0); pointer-events: all; }
+  .aw-panel--closed { opacity: 0; transform: scale(0.88) translateY(16px); pointer-events: none; visibility: hidden; }
+  .aw-panel--open { opacity: 1; transform: scale(1) translateY(0); pointer-events: all; visibility: visible; }
   .aw-header {
     background: linear-gradient(135deg, #1e2a52 0%, #16203e 100%);
     padding: 14px 16px; display: flex; align-items: center; gap: 10px; flex-shrink: 0;
@@ -2665,14 +2667,17 @@ export default function AgentWidget({ onNavigateToCategory, onNavigateToTool }) 
 
   return (
     <>
-      <div ref={panelRef} className={`aw-panel ${open ? "aw-panel--open" : "aw-panel--closed"}`}>
+      <div 
+        ref={panelRef} 
+        className={`aw-panel ${open ? "aw-panel--open" : "aw-panel--closed"}`}
+        style={!open ? { opacity: 0, visibility: "hidden", pointerEvents: "none" } : undefined}
+      >
         <div className="aw-header">
           <div className="aw-header-avatar">
             <Sparkles style={{ width: 16, height: 16, color: "#fff" }} />
           </div>
           <div className="aw-header-info">
-            <div className="aw-header-title">AI Feature Assistant</div>
-            <div className="aw-header-sub">{stats.featureCount} tools indexed · 100% local</div>
+            <div className="aw-header-title" style={{ fontSize: '15px' }}>AI Agent</div>
           </div>
           <div className="aw-header-actions">
             <button className="aw-header-btn" onClick={() => agent.clearChat()} title="New chat">
@@ -2708,9 +2713,6 @@ export default function AgentWidget({ onNavigateToCategory, onNavigateToTool }) 
                 <div style={{ width: "100%", marginTop: 16 }}>
                   <div className="aw-featured-title">
                     <span>FEATURED QUICK CARDS</span>
-                    <button className="aw-featured-view-all" onClick={() => agent.sendMessage("Show all features")}>
-                      View All {stats.featureCount} <ChevronRight style={{ width: 11, height: 11 }} />
-                    </button>
                   </div>
                   <div className="aw-featured-grid">
                     {quickFeatures.map((feat) => (

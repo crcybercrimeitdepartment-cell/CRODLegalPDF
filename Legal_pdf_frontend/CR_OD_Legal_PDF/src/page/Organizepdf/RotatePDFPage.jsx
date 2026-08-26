@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 
-const API_BASE_URL = (import.meta.env.VITE_BACKEND_URL || 'https://cr-od-legal-pdf-backend.onrender.com');
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 const ROTATION_OPTIONS = [
   { label: '90° Clockwise', value: 90 },

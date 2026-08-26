@@ -8,6 +8,7 @@ routes, and lifespan events.
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -42,7 +43,13 @@ app.add_middleware(RequestIDMiddleware)
 
 register_exception_handler(app)
 
-import os
+# ── Raise Starlette's multipart upload limit to 500 MB ──────────────────────
+# Starlette 1.x uses MultiPartParser.max_part_size (default: 1 MB).
+# spool_max_size controls when to spool to disk vs keeping in memory.
+from starlette.formparsers import MultiPartParser
+MultiPartParser.max_part_size = 500 * 1024 * 1024   # 500 MB hard limit
+MultiPartParser.spool_max_size = 10 * 1024 * 1024   # spool to disk after 10 MB
+
 from app.core.paths import TEMP_PROCESSING_DIR
 os.makedirs(TEMP_PROCESSING_DIR, exist_ok=True)
 

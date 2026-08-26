@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '';
 
 /**
  * Generic PDF Tool Page component.
@@ -103,7 +103,7 @@ export default function GenericPDFToolPage({
           const errData = await response.json();
           errMsg = errData.detail || errMsg;
           if (typeof errMsg !== 'string') errMsg = JSON.stringify(errMsg);
-        } catch (_) {}
+        } catch (_) { }
         throw new Error(errMsg);
       }
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ArrowLeft, Mic, MicOff, Settings2, Play, FileText, Download, RotateCcw, Upload, Layers } from 'lucide-react';
 import { BackgroundWatermark } from '../../components/crodlegalpdf';
 
-var API_BASE = (import.meta.env.VITE_API_URL || '') + '/api/accessibility/speech-to-text';
+var API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '') + '/api/accessibility/speech-to-text';
 
 var exampleCommands = [
   'Page 3 par Introduction ke baad ye text add karo: Hello World.',

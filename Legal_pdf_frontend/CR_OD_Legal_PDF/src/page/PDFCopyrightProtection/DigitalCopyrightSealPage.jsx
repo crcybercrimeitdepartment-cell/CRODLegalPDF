@@ -117,9 +117,18 @@ export default function DigitalCopyrightSealPage({ tool, onBack }) {
       const j = await r.json();
       
       if (j.success) {
-        setVerifyResult(j.data);
+        setVerifyResult({
+          has_seal: j.found,
+          verification_result: j.hash_valid ? 'valid' : 'invalid',
+          seal_data: {
+            owner: j.owner,
+            seal_hash: j.document_hash,
+            algorithm: 'SHA-256'
+          },
+          message: j.message
+        });
       } else {
-        setVerifyError(j.error || 'Verification failed');
+        setVerifyError(j.error || j.detail || 'Verification failed');
       }
     } catch (ex) {
       setVerifyError('Error: ' + ex.message);
@@ -374,7 +383,7 @@ export default function DigitalCopyrightSealPage({ tool, onBack }) {
                           Seal {verifyResult.verification_result === 'valid' ? 'Valid ✓' : 'Invalid ✗'}
                         </p>
                         <p className={`text-xs font-medium ${verifyResult.verification_result === 'valid' ? 'text-emerald-600' : 'text-amber-600'}`}>
-                          {verifyResult.verification_result === 'valid' ? 'Document integrity verified successfully.' : 'Seal could not be validated.'}
+                          {verifyResult.message || (verifyResult.verification_result === 'valid' ? 'Document integrity verified successfully.' : 'Seal could not be validated.')}
                         </p>
                       </div>
                     </div>

@@ -193,7 +193,24 @@ export default function OCRPDFPage() {
 
     const fd = new FormData();
     fd.append('file', file);
-    Object.keys(settings).forEach(key => fd.append(key, settings[key]));
+    
+    // Map camelCase to snake_case for backend
+    const keyMap = {
+      language: 'language',
+      quality: 'quality',
+      autoRotate: 'auto_rotate',
+      deskew: 'deskew',
+      cleanNoise: 'clean_noise',
+      preserveMetadata: 'preserve_metadata',
+      skipSearchable: 'skip_searchable',
+      forceOcr: 'force_ocr'
+    };
+    
+    Object.keys(settings).forEach(key => {
+      if (keyMap[key]) {
+        fd.append(keyMap[key], settings[key]);
+      }
+    });
 
     try {
       const res = await fetch(`${API_BASE_URL}/api/pdf/pdf-to-searchable/process`, { method: 'POST', body: fd });
@@ -252,8 +269,8 @@ export default function OCRPDFPage() {
       
       {/* Header */}
       <div className="text-center py-8 mb-4 max-w-3xl mx-auto">
-        <h1 class="text-2xl sm:text-4xl font-black text-[#1e2a52] leading-tight mb-3">PDF to Searchable PDF (OCR)</h1>
-        <p class="text-xs sm:text-sm text-slate-600 font-medium leading-relaxed">Convert scanned and non-searchable PDF documents into searchable PDFs with selectable and highlightable text layers.</p>
+        <h1 className="text-2xl sm:text-4xl font-black text-[#1e2a52] leading-tight mb-3">PDF to Searchable PDF (OCR)</h1>
+        <p className="text-xs sm:text-sm text-slate-600 font-medium leading-relaxed">Convert scanned and non-searchable PDF documents into searchable PDFs with selectable and highlightable text layers.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-6 xl:gap-8 items-start pb-12">
@@ -529,7 +546,7 @@ export default function OCRPDFPage() {
                 </table>
               </div>
 
-              <a href={result.downloadUrl || '#'} download={result.filename || 'searchable.pdf'} className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-md shadow-green-600/20 transition-all">
+              <a href={`${API_BASE_URL || ''}${result.downloadUrl || '#'}`} download={result.filename || 'searchable.pdf'} className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-md shadow-green-600/20 transition-all">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
                 Download Searchable PDF
               </a>

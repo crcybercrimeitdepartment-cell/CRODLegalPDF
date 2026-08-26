@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Upload, FileText, Download, CheckCircle2, ArrowLeft, X, AlertCircle, Eye, Code, FileUp } from 'lucide-react';
 import CodeEditor, { LivePreview } from '../../components/CodeEditor';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '';
 
 export default function HTMLtoPDFPage({ onBack }) {
   const toolName = "HTML to PDF";

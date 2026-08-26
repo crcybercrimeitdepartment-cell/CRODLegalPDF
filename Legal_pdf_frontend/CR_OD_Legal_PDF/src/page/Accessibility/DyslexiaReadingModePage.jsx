@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BackgroundWatermark } from '../../components/crodlegalpdf';
 import { ArrowLeft, Upload, Download, FileText, Glasses, Ruler, ChevronLeft, ChevronRight } from 'lucide-react';
 
-const API_BASE = (import.meta.env.VITE_API_URL || '') + '/api/accessibility';
+const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '') + '/api/accessibility';
 
 var fonts = [
   { value: 'OpenDyslexic', label: 'OpenDyslexic (Heavy-bottomed strokes)', css: "'OpenDyslexic', sans-serif" },

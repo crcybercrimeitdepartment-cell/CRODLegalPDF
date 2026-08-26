@@ -17,7 +17,7 @@ import App from './App.jsx' // Root application component
 // If a deployed backend URL is provided via VITE_API_URL, we globally intercept 
 // relative fetch requests and download links to point to the backend domain.
 // This allows the frontend to work seamlessly without Vite's local proxy.
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '';
 
 if (API_BASE_URL) {
   // 1. Intercept fetch calls

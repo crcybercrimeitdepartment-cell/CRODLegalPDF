@@ -1,8 +1,7 @@
 import logging
-import shutil
 from typing import Any, Dict
-from pathlib import Path
 from pdf2docx import Converter
+from docx import Document
 
 from app.core.paths import Paths
 
@@ -40,6 +39,10 @@ class PDFToWordService:
             cv = Converter(str(pdf_path))
             cv.convert(str(output_path), start=0, end=None)
             cv.close()
+
+            # Normalize the generated DOCX so Microsoft Word opens it more reliably.
+            normalized_doc = Document(str(output_path))
+            normalized_doc.save(str(output_path))
             
             if not output_path.exists():
                 raise ValueError("Conversion succeeded but output file is missing.")

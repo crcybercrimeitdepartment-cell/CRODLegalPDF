@@ -4,12 +4,19 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 export default function InsertBlankPagePage() {
   const [file, setFile] = useState(null);
+  
+  // Tool options
+  const [insertMode, setInsertMode] = useState('after');
+  const [targetPage, setTargetPage] = useState(1);
+  const [targetPageEnd, setTargetPageEnd] = useState('');
+  const [blankPageCount, setBlankPageCount] = useState(1);
+  
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDone, setIsDone] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
   const [downloadUrl, setDownloadUrl] = useState(null);
   const [isDragOver, setIsDragOver] = useState(false);
-  
+  const [previewUrl, setPreviewUrl] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
 
   const fileInputRef = useRef(null);
@@ -18,6 +25,8 @@ export default function InsertBlankPagePage() {
     if (f && f.type === 'application/pdf') {
       setFile(f);
       setErrorMsg(null);
+      const blob = new Blob([f], { type: 'application/pdf' });
+      setPreviewUrl(URL.createObjectURL(blob));
     } else {
       setErrorMsg('Please upload a valid PDF file.');
     }
@@ -43,22 +52,12 @@ export default function InsertBlankPagePage() {
     setIsDone(false);
 
     try {
-      // 1. Upload
-      const uploadForm = new FormData();
-      uploadForm.append('file', file);
-
-      const uploadRes = await fetch(`${API_BASE_URL}/api/pdf/insert-blank-page/upload`, {
-        method: 'POST',
-        body: uploadForm,
-      });
-
-      if (!uploadRes.ok) throw new Error('Upload failed.');
-      const uploadData = await uploadRes.json();
-      
-      // 2. Process
       const processForm = new FormData();
-      processForm.append('request_id', uploadData.request_id);
-      processForm.append('filename', uploadData.filename);
+      processForm.append('file', file);
+      processForm.append('insert_mode', insertMode);
+      processForm.append('target_page', targetPage);
+      if (targetPageEnd) processForm.append('target_page_end', targetPageEnd);
+      processForm.append('blank_page_count', blankPageCount);
 
       const processRes = await fetch(`${API_BASE_URL}/api/pdf/insert-blank-page/process`, {
         method: 'POST',
@@ -66,18 +65,20 @@ export default function InsertBlankPagePage() {
       });
 
       if (!processRes.ok) {
-        const err = await processRes.json().catch(() => ({}));
-        throw new Error(err.detail || `Processing failed (${processRes.status})`);
+        let errDesc = `Processing failed (${processRes.status})`;
+        try {
+          const err = await processRes.json();
+          errDesc = err.detail || errDesc;
+        } catch (_) {}
+        throw new Error(errDesc);
       }
 
       const processData = await processRes.json();
       const dlUrl = processData.download_url;
       if (!dlUrl) throw new Error('Download URL not provided by server.');
 
-      // 3. Prepare Download
       setDownloadUrl(`${API_BASE_URL}${dlUrl}`);
       setIsDone(true);
-      setShowPreview(true);
     } catch (err) {
       setErrorMsg(err.message || 'An unexpected error occurred.');
     } finally {
@@ -91,6 +92,7 @@ export default function InsertBlankPagePage() {
     setIsDone(false);
     setErrorMsg(null);
     setDownloadUrl(null);
+    setPreviewUrl(null);
     setShowPreview(false);
   };
 
@@ -99,7 +101,7 @@ export default function InsertBlankPagePage() {
       <div className="w-full max-w-4xl relative z-10">
         <div className="text-center max-w-2xl mx-auto mt-4 mb-8 px-4">
           <h1 className="text-3xl font-black text-[#1e2a52]">Insert Blank Page</h1>
-          <p className="text-sm text-slate-600 mt-2">Process your PDF using our advanced tools.</p>
+          <p className="text-sm text-slate-600 mt-2">Add blank pages anywhere in your PDF document.</p>
         </div>
 
         {!isProcessing && !isDone && (
@@ -128,6 +130,43 @@ export default function InsertBlankPagePage() {
                 {file ? file.name : 'Drag & Drop your PDF here'}
               </p>
             </div>
+
+            {file && (
+              <div className="mt-8 space-y-4 text-left bg-slate-50 p-6 rounded-xl border border-slate-200">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Insert Mode</label>
+                  <select className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" value={insertMode} onChange={e => setInsertMode(e.target.value)}>
+                    <option value="after">After Target Page</option>
+                    <option value="before">Before Target Page</option>
+                    <option value="start">At Start of Document</option>
+                    <option value="end">At End of Document</option>
+                    <option value="between">Between Pages (Target to End)</option>
+                  </select>
+                </div>
+                {(insertMode === 'before' || insertMode === 'after' || insertMode === 'between') && (
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1">Target Page</label>
+                    <input type="number" min="1" className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" value={targetPage} onChange={e => setTargetPage(e.target.value)} />
+                  </div>
+                )}
+                {insertMode === 'between' && (
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1">End Page (Optional)</label>
+                    <input type="number" min="1" className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" value={targetPageEnd} onChange={e => setTargetPageEnd(e.target.value)} placeholder="Leave empty to go to the end" />
+                  </div>
+                )}
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Number of Blank Pages</label>
+                  <input type="number" min="1" className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" value={blankPageCount} onChange={e => setBlankPageCount(e.target.value)} />
+                </div>
+              </div>
+            )}
+
+            {file && previewUrl && (
+              <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50/50 overflow-hidden h-[400px] shadow-inner w-full">
+                  <iframe src={`${previewUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`} className="w-full h-full border-none" title="PDF Preview" />
+              </div>
+            )}
 
             <div className="text-center mt-8">
               <button

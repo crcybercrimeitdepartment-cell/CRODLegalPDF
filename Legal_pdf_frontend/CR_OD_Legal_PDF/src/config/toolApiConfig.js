@@ -4,7 +4,7 @@
  * Used by ToolWorkspace to make real backend API calls.
  */
 
-const API_BASE = import.meta.env.VITE_API_URL || '';
+const API_BASE = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '';
 
 // PDF Security tools -> /api/pdf/security/*
 const PDF_SECURITY_ENDPOINTS = {

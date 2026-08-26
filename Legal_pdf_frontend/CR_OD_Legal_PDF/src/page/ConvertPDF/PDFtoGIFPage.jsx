@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Upload, FileText, Download, CheckCircle2, ArrowLeft, X, AlertCircle } from 'lucide-react';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '';
 
 export default function PDFtoGIFPage({ onBack }) {
   const toolName = "PDF to GIF";
@@ -63,7 +63,7 @@ export default function PDFtoGIFPage({ onBack }) {
       const processData = await processRes.json();
 
       // Step 3: Download the output as blob
-      const dlUrl = processData.download_url || processData.zip_url;
+      const dlUrl = processData.download_url || processData.zip_url || processData.animated_url || processData.image_urls?.[0] || processData.file_urls?.[0];
       if (!dlUrl) throw new Error('No download URL returned from server.');
 
       const fileRes = await fetch(`${API_BASE_URL}${dlUrl}`);

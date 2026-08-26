@@ -1,12 +1,11 @@
 import React, { useState, useRef } from 'react';
 import { Upload, FileText, Download, CheckCircle2, ArrowLeft, X, AlertCircle } from 'lucide-react';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '';
 
 export default function PDFtoSearchablePDFOCRPage({ onBack }) {
   const toolName = "PDF to Searchable PDF (OCR)";
   const toolDesc = "Convert your PDF with PDF to Searchable PDF (OCR).";
-  const apiSlug = "pdf-to-searchable";
   const outputExt = ".pdf";
 
   const [file, setFile] = useState(null);
@@ -38,7 +37,7 @@ export default function PDFtoSearchablePDFOCRPage({ onBack }) {
       // Step 1: Upload the real File object
       const uploadForm = new FormData();
       uploadForm.append('file', file);
-      const uploadRes = await fetch(`${API_BASE_URL}/api/convert-from-pdf/${apiSlug}/upload`, {
+      const uploadRes = await fetch(`${API_BASE_URL}/api/pdf/pdf-to-searchable/upload`, {
         method: 'POST',
         body: uploadForm,
       });
@@ -50,9 +49,8 @@ export default function PDFtoSearchablePDFOCRPage({ onBack }) {
 
       // Step 2: Process
       const processForm = new FormData();
-      processForm.append('request_id', uploadData.request_id);
-      processForm.append('filename', uploadData.filename);
-      const processRes = await fetch(`${API_BASE_URL}/api/convert-from-pdf/${apiSlug}/process`, {
+      processForm.append('file', file);
+      const processRes = await fetch(`${API_BASE_URL}/api/pdf/pdf-to-searchable/process`, {
         method: 'POST',
         body: processForm,
       });

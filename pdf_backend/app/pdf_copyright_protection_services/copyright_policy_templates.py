@@ -12,6 +12,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
+# pyrefly: ignore [missing-import]
 import fitz  # PyMuPDF
 
 from app.core.paths import Paths
@@ -114,7 +115,10 @@ class CopyrightPolicyTemplatesService:
         try:
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
             meta = doc.metadata or {}
-            raw = meta.get(METADATA_KEY) or ""
+            kw = meta.get("keywords") or ""
+            import re
+            match = re.search(r"\[" + METADATA_KEY + r":\s*(.*?)\s*\]", kw)
+            raw = match.group(1) if match else ""
             doc.close()
             if raw:
                 parsed = json.loads(raw)
@@ -168,11 +172,19 @@ class CopyrightPolicyTemplatesService:
         cleaned = {}
         for field in allowed_fields:
             cleaned[field] = str(policy_data.get(field, "")).strip()
-        doc.set_metadata({METADATA_KEY: json.dumps(cleaned, ensure_ascii=False)})
+            
+        current_meta = doc.metadata or {}
+        new_meta = dict(current_meta)
+        kw = new_meta.get("keywords") or ""
+        import re
+        kw = re.sub(r"\[" + METADATA_KEY + r":.*?\]", "", kw).strip()
+        new_val = json.dumps(cleaned, ensure_ascii=False)
+        kw += f" [{METADATA_KEY}: {new_val}]"
+        new_meta["keywords"] = kw.strip()
+        doc.set_metadata(new_meta)
         page = doc.new_page(width=612, height=792)
-        font = fitz.Font("helv")
         y = 50
-        page.insert_text(fitz.Point(50, y), "Copyright Policy", font=font, fontsize=16, color=(0, 0, 0))
+        page.insert_text(fitz.Point(50, y), "Copyright Policy", fontname="helv", fontsize=16, color=(0, 0, 0))
         y += 30
         for field in allowed_fields:
             val = cleaned.get(field, "")
@@ -181,13 +193,13 @@ class CopyrightPolicyTemplatesService:
                 if y > 720:
                     page = doc.new_page(width=612, height=792)
                     y = 50
-                page.insert_text(fitz.Point(50, y), label, font=font, fontsize=10, color=(0, 0, 0))
+                page.insert_text(fitz.Point(50, y), label, fontname="helv", fontsize=10, color=(0, 0, 0))
                 y += 14
                 for line in val.split("\n"):
                     if y > 750:
                         page = doc.new_page(width=612, height=792)
                         y = 50
-                    page.insert_text(fitz.Point(60, y), line[:100], font=font, fontsize=9, color=(0.2, 0.2, 0.2))
+                    page.insert_text(fitz.Point(60, y), line[:100], fontname="helv", fontsize=9, color=(0.2, 0.2, 0.2))
                     y += 12
                 y += 6
         out_dir = Paths.request_output(session_id)
@@ -219,7 +231,10 @@ class CopyrightPolicyTemplatesService:
         pdf_bytes = files[0].read_bytes()
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         meta = doc.metadata or {}
-        raw = meta.get(METADATA_KEY) or ""
+        kw = meta.get("keywords") or ""
+        import re
+        match = re.search(r"\[" + METADATA_KEY + r":\s*(.*?)\s*\]", kw)
+        raw = match.group(1) if match else ""
         doc.close()
         if not raw:
             return {"success": False, "verified": False, "message": "No policy data found in saved PDF."}

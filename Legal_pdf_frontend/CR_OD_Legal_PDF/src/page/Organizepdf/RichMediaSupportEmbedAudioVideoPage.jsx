@@ -98,7 +98,7 @@ export default function RichMediaSupportEmbedAudioVideoPage() {
         setIsProcessing(true);
         
         try {
-            const API_BASE_URL = (import.meta.env.VITE_BACKEND_URL || 'https://cr-od-legal-pdf-backend.onrender.com');
+            const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
             // Step 1: Upload PDF
             const pdfForm = new FormData();

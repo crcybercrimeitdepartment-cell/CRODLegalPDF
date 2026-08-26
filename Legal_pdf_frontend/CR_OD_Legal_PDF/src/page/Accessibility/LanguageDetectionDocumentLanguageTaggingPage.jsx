@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback } from 'react';
 import { BackgroundWatermark } from '../../components/crodlegalpdf';
 import { ArrowLeft, Upload, Globe, Tag, BarChart3, AlertTriangle, Download, CheckCircle2 } from 'lucide-react';
 
-var API_BASE = (import.meta.env.VITE_API_URL || '') + '/api/accessibility';
+var API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '') + '/api/accessibility';
 
 var LANGUAGES = [
   { code: 'en', name: 'English' },

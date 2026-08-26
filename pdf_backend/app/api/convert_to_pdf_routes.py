@@ -1199,6 +1199,10 @@ async def pdfa_to_pdf_upload(request: Request, file: UploadFile = File(...)):
     await save_upload(file.file, upload_dir / file.filename)
     return {"success": True, "request_id": request_id, "filename": file.filename}
 
+@router.post("/convert-from-pdf/pdf-to-pdfa/upload")
+async def pdf_to_pdfa_upload(request: Request, file: UploadFile = File(...)):
+    return await pdfa_to_pdf_upload(request, file)
+
 @router.post("/convert-to-pdf/pdfa-to-pdf/process")
 async def pdfa_to_pdf_process(request_id: str = Form(...), filename: str = Form(...)):
     try:
@@ -1209,4 +1213,8 @@ async def pdfa_to_pdf_process(request_id: str = Form(...), filename: str = Form(
     except Exception as e:
         logger.error(f"pdfa-to-pdf error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/convert-from-pdf/pdf-to-pdfa/process")
+async def pdf_to_pdfa_process(request_id: str = Form(...), filename: str = Form(...)):
+    return await pdfa_to_pdf_process(request_id, filename)
 

@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 
-const API_BASE_URL = (import.meta.env.VITE_BACKEND_URL || 'https://cr-od-legal-pdf-backend.onrender.com');
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 export default function ScantoPDFPage() {
   const [imageFiles, setImageFiles] = useState([]);
@@ -40,7 +40,7 @@ export default function ScantoPDFPage() {
       // Step 2: Upload each image
       for (const imgFile of imageFiles) {
         const uploadForm = new FormData();
-        uploadForm.append('file', imgFile);
+        uploadForm.append('files', imgFile); // Fixed: backend expects 'files'
         uploadForm.append('request_id', requestId);
         const uploadRes = await fetch(`${API_BASE_URL}/api/pdf/scan/upload`, { method: 'POST', body: uploadForm });
         if (!uploadRes.ok) throw new Error(`Failed to upload ${imgFile.name}`);

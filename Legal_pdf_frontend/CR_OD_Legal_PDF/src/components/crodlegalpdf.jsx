@@ -14,8 +14,8 @@
  *  - All components are fully responsive (mobile-first Tailwind breakpoints).
  */
 import React, { useState, useEffect } from 'react';
-import watermarkImg from '../assets/WaterMark.png';
-import phoneWatermarkImg from '../assets/PhoneWaterMark.png';
+const watermarkImg = 'https://res.cloudinary.com/dlhmkbijh/image/upload/v1787579185/WaterMark_mm8uly.png';
+const phoneWatermarkImg = 'https://res.cloudinary.com/dlhmkbijh/image/upload/v1787579186/PhoneWaterMark_o0hbr0.png';
 import {
   FolderTree,
   FileUp,

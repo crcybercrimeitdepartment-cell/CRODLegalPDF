@@ -53,7 +53,9 @@ import { ReviewAnnotationPage, PDF_TOOLS as tools13 } from './page/ReviewAnnotat
 import { FingerprintAuthenticationBiometricSignaturePage, BIOMETRIC_TOOLS as tools14 } from './page/FingerprintAuthenticationBiometricSignature/FingerprintAuthenticationBiometricSignature';
 import { PDFCopyrightProtectionPage, PDF_TOOLS as tools15 } from './page/PDFCopyrightProtection/PDFCopyrightProtection';
 import SoftwareAboutUsPage, { SOFTWARE_ABOUT_US_TOOLS as tools16 } from './page/SoftwareAboutUs/SoftwareAboutUs';
+import ContactUsPage from './page/ContactUs/ContactUs';
 import AgentWidget from './page/AIagent/agent';
+
 
 /* -------------------------------------------------------------------------- */
 /*  SUB_TOOLS_MAP                                                              */
@@ -77,6 +79,7 @@ const SUB_TOOLS_MAP = {
   'fingerprint-auth-signature': tools14 || [],
   'pdf-copyright-protection': tools15 || [],
   'software-about-us': tools16 || [],
+  'Contact-Us': [],
   'AI-Agent': [],
 };
 
@@ -405,6 +408,8 @@ export default function App() {
           <PDFCopyrightProtectionPage onBack={handlePageBack} />
         ) : activePage === 'software-about-us' ? (
           <SoftwareAboutUsPage onBack={handlePageBack} />
+        ) : activePage === 'Contact-Us' ? (
+          <ContactUsPage onBack={handlePageBack} />
         // ) : activePage === 'AI-Agent' ? (
         //   <AIAgentPage onBack={handlePageBack} />
           /* ── d) Home Dashboard — default view ─────────────────────────── */

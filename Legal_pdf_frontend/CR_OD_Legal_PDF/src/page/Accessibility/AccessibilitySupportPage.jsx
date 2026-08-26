@@ -10,7 +10,7 @@ const LANGUAGES = [
   { value: 'de-DE', label: 'German' },
 ];
 
-const API_BASE_URL = (import.meta.env.VITE_API_URL || '');
+const API_BASE_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '');
 
 const COLOR_MODES = [
   { id: 'normal', label: 'Default' },

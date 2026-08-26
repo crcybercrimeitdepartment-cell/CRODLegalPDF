@@ -12,6 +12,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
+# pyrefly: ignore [missing-import]
 import fitz  # PyMuPDF
 
 from app.core.paths import Paths
@@ -57,7 +58,10 @@ class UsageRightsManagementService:
         try:
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
             meta = doc.metadata or {}
-            raw = meta.get(METADATA_KEY) or ""
+            kw = meta.get("keywords") or ""
+            import re
+            match = re.search(r"\[" + METADATA_KEY + r":\s*(.*?)\s*\]", kw)
+            raw = match.group(1) if match else ""
             if raw:
                 try:
                     parsed = json.loads(raw)
@@ -112,7 +116,17 @@ class UsageRightsManagementService:
         cleaned = {}
         for key, _, _ in PERMISSION_FIELDS:
             cleaned[key] = bool(perms.get(key, True))
-        doc.set_metadata({METADATA_KEY: json.dumps(cleaned, ensure_ascii=False)})
+        
+        current_meta = doc.metadata or {}
+        new_meta = dict(current_meta)
+        kw = new_meta.get("keywords") or ""
+        import re
+        kw = re.sub(r"\[" + METADATA_KEY + r":.*?\]", "", kw).strip()
+        new_val = json.dumps(cleaned, ensure_ascii=False)
+        kw += f" [{METADATA_KEY}: {new_val}]"
+        new_meta["keywords"] = kw.strip()
+        doc.set_metadata(new_meta)
+        
         perm_flags = 0
         if cleaned.get("print", True):
             perm_flags |= fitz.PDF_PERM_PRINT
@@ -127,7 +141,7 @@ class UsageRightsManagementService:
         if cleaned.get("form_fill", True):
             perm_flags |= fitz.PDF_PERM_FORM
         if cleaned.get("extract", True):
-            perm_flags |= fitz.PDF_PERM_EXTRACT
+            perm_flags |= fitz.PDF_PERM_ACCESSIBILITY
         if cleaned.get("assemble", True):
             perm_flags |= fitz.PDF_PERM_ASSEMBLE
         has_restrictions = not all(cleaned.values())

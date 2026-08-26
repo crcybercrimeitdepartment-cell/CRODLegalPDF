@@ -12,6 +12,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict
 
+# pyrefly: ignore [missing-import]
 import fitz  # PyMuPDF
 
 from app.core.paths import Paths
@@ -44,9 +45,12 @@ class CopyrightClaimReportService:
                 "copyright_registration", "digital_seal", "invisible_watermark",
                 "usage_rights", "copyright_policy",
             ]
+            kw = meta.get("keywords") or ""
             for key in custom_keys:
-                raw = meta.get(key, "") or ""
-                if raw:
+                import re
+                match = re.search(r"\[" + key + r":\s*(.*?)\s*\]", kw)
+                if match:
+                    raw = match.group(1)
                     try:
                         result[key] = json.loads(raw)
                     except (json.JSONDecodeError, TypeError):

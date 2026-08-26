@@ -6,6 +6,7 @@ export default function DownloadOptimizedPDFPage() {
   const [isSuccess, setIsSuccess] = useState(false);
   const [isFlying, setIsFlying] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [downloadUrl, setDownloadUrl] = useState(null);
   const [previewUrls, setPreviewUrls] = useState({});
   const pdfInputRef = useRef(null);
 
@@ -73,6 +74,7 @@ export default function DownloadOptimizedPDFPage() {
     setPreviewUrls({});
     setIsSuccess(false);
     setIsProcessing(false);
+    setDownloadUrl(null);
   };
 
   const processFiles = async () => {
@@ -83,24 +85,24 @@ export default function DownloadOptimizedPDFPage() {
         setIsProcessing(true);
         
         try {
-          const API_BASE_URL = (import.meta.env.VITE_BACKEND_URL || 'https://cr-od-legal-pdf-backend.onrender.com');
+          const API_BASE_URL = import.meta.env.VITE_API_URL || '';
           
-          // 1. Upload
-          const uploadForm = new FormData();
-          uploadForm.append('file', pdfFiles[0]);
-          const uploadRes = await fetch(`${API_BASE_URL}/api/pdf/download-optimized/upload`, {
-            method: 'POST',
-            body: uploadForm
-          });
-          if (!uploadRes.ok) throw new Error('Upload failed');
-          const uploadData = await uploadRes.json();
-
-          // 2. Process
+          // 1. Process directly
+          const keyMap = {
+            compressStreams: 'compress_streams',
+            optimizeFonts: 'optimize_fonts',
+            removeMetadata: 'remove_metadata',
+            compressImages: 'compress_images',
+            optimizeResources: 'optimize_resources',
+            removeDuplicates: 'remove_duplicates',
+            preserveQuality: 'preserve_quality',
+          };
           const processForm = new FormData();
-          processForm.append('request_id', uploadData.request_id);
-          processForm.append('filename', uploadData.filename);
+          processForm.append('file', pdfFiles[0]);
           Object.entries(settings).forEach(([key, val]) => {
-            processForm.append(key, val);
+            if (keyMap[key]) {
+              processForm.append(keyMap[key], val);
+            }
           });
           
           const processRes = await fetch(`${API_BASE_URL}/api/pdf/download-optimized/process`, {
@@ -109,8 +111,13 @@ export default function DownloadOptimizedPDFPage() {
           });
           
           if (!processRes.ok) {
-            const err = await processRes.json().catch(() => ({}));
-            throw new Error(err.detail || 'Processing failed');
+            let errMsg = 'Processing failed';
+            try {
+              const err = await processRes.json();
+              errMsg = err.detail || errMsg;
+              if (typeof errMsg !== 'string') errMsg = JSON.stringify(errMsg);
+            } catch (_) {}
+            throw new Error(errMsg);
           }
           
           const processData = await processRes.json();
@@ -118,13 +125,7 @@ export default function DownloadOptimizedPDFPage() {
           if (!fileRes.ok) throw new Error('Failed to download file');
           const blob = await fileRes.blob();
           const dlUrl = window.URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = dlUrl;
-          link.download = 'output.pdf';
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          window.URL.revokeObjectURL(dlUrl);
+          setDownloadUrl(dlUrl);
           setIsSuccess(true);
         } catch (err) {
           console.warn('API failed, using mock success.', err);
@@ -330,10 +331,12 @@ export default function DownloadOptimizedPDFPage() {
               <h3 className="text-2xl font-bold text-[#1e2a52] mb-3">Done!</h3>
               <p className="text-slate-500 text-center mb-8 font-medium">Your PDF has been successfully optimized.</p>
               
-              <button onClick={() => alert('Downloading...')} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 px-8 rounded-xl shadow-lg shadow-emerald-200 transition-all active:scale-95 flex justify-center items-center gap-2 mb-3">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                Download
-              </button>
+              {downloadUrl && (
+                <a href={downloadUrl} download="optimized.pdf" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 px-8 rounded-xl shadow-lg shadow-emerald-200 transition-all active:scale-95 flex justify-center items-center gap-2 mb-3">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                  Download
+                </a>
+              )}
               <button onClick={resetAll} className="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-4 px-8 rounded-xl shadow-lg shadow-slate-300 transition-all active:scale-95 flex justify-center items-center gap-2">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
                 Process another file

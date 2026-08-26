@@ -2,7 +2,7 @@
 // All requests use relative URLs — Vite proxy forwards to backend automatically.
 // Backend can run on ANY port — just set VITE_BACKEND_URL in .env
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '';
 
 /**
  * Helper to handle file uploads properly.
@@ -12,7 +12,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || '';
  */
 export const uploadFiles = async (endpoint, formData, expectFileResponse = false) => {
     try {
-        const response = await fetch(endpoint, {
+        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
             method: 'POST',
             body: formData,
         });
@@ -24,7 +24,7 @@ export const uploadFiles = async (endpoint, formData, expectFileResponse = false
                 if (errorData.detail) {
                     errorMsg = typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail);
                 }
-            } catch (e) {}
+            } catch (e) { }
             throw new Error(errorMsg);
         }
 
@@ -45,7 +45,7 @@ export const uploadFiles = async (endpoint, formData, expectFileResponse = false
  */
 export const downloadFile = async (url, filename) => {
     try {
-        const response = await fetch(url, { method: 'GET' });
+        const response = await fetch(`${API_BASE_URL}${url}`, { method: 'GET' });
 
         if (!response.ok) {
             throw new Error(`Download failed: ${response.status} ${response.statusText}`);
@@ -76,7 +76,7 @@ export const downloadFile = async (url, filename) => {
  */
 export const getFullUrl = (path) => {
     if (!path || path.startsWith('http') || path === '#' || path === '#mock-download' || path === '#mock-zip-download') return path;
-    return path;
+    return `${API_BASE_URL}${path}`;
 };
 
 export default {

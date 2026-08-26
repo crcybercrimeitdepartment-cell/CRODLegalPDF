@@ -1,5 +1,7 @@
 import React, { useState, useRef } from 'react';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
 export default function BackgroundManagementPage() {
   // Main PDF File State
   const [pdfFile, setPdfFile] = useState(null);
@@ -22,6 +24,7 @@ export default function BackgroundManagementPage() {
   const [isFlying, setIsFlying] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [downloadUrl, setDownloadUrl] = useState(null);
   
   const pdfInputRef = useRef(null);
   const imageInputRef = useRef(null);
@@ -85,6 +88,7 @@ export default function BackgroundManagementPage() {
     setOpacity(100);
     setRotation(0);
     setPagesSelection('all');
+    setDownloadUrl(null);
   };
 
   const processFile = async () => {
@@ -114,38 +118,30 @@ export default function BackgroundManagementPage() {
         }
 
         try {
-            // Attempt a real API call (fallback to mock on error)
             const response = await fetch(`${API_BASE_URL}/api/pdf/background`, { method: 'POST', body: fd });
-            if (response.ok) {
-                const data = await response.json();
-                if (data.download_url) {
-                    const fileRes = await fetch(`${API_BASE_URL}${data.download_url}`);
-                    if (!fileRes.ok) throw new Error('Failed to download file');
-                    const blob = await fileRes.blob();
-                    const dlUrl = window.URL.createObjectURL(blob);
-                    const link = document.createElement('a');
-                    link.href = dlUrl;
-                    link.download = 'output.pdf';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    window.URL.revokeObjectURL(dlUrl);
-                }
-                setIsSuccess(true);
-            } else {
-                throw new Error('Fallback to mock');
+            if (!response.ok) {
+                let errMsg = 'Processing failed';
+                try {
+                  const err = await response.json();
+                  errMsg = err.detail || errMsg;
+                } catch (_) {}
+                throw new Error(errMsg);
             }
+            const data = await response.json();
+            if (data.download_url) {
+                const fileRes = await fetch(`${API_BASE_URL}${data.download_url}`);
+                if (!fileRes.ok) throw new Error('Failed to download file');
+                const blob = await fileRes.blob();
+                const dlUrl = window.URL.createObjectURL(blob);
+                setDownloadUrl(dlUrl);
+            }
+            setIsSuccess(true);
         } catch (err) {
-            // Mock backend processing delay
-            console.warn('API missing or failed, using mock success.', err);
-            setTimeout(() => {
-                setIsSuccess(true);
-            }, 2600);
+            console.error('API failed.', err);
+            alert('Failed to process: ' + err.message);
         } finally {
-            setTimeout(() => {
-                setIsProcessing(false);
-                setIsFlying(false);
-            }, 2600);
+            setIsProcessing(false);
+            setIsFlying(false);
         }
     }, 500);
   };
@@ -373,10 +369,12 @@ export default function BackgroundManagementPage() {
               <h3 className="text-2xl font-bold text-slate-800 mb-3">Processing Complete!</h3>
               <p className="text-slate-500 text-center mb-8 font-medium">Your PDF background has been updated successfully.</p>
               
-              <button onClick={() => alert('Downloading...')} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 px-8 rounded-xl shadow-lg shadow-emerald-200 transition-all active:scale-95 flex justify-center items-center gap-2 mb-3">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                Download
-              </button>
+              {downloadUrl && (
+                <a href={downloadUrl} download="background_updated.pdf" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 px-8 rounded-xl shadow-lg shadow-emerald-200 transition-all active:scale-95 flex justify-center items-center gap-2 mb-3">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                  Download Updated PDF
+                </a>
+              )}
               <button onClick={resetAll} className="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-4 px-8 rounded-xl shadow-lg shadow-slate-300 transition-all active:scale-95 flex justify-center items-center gap-2">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
                 Process another file

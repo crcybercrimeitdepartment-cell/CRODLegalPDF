@@ -5,10 +5,21 @@ import shutil
 from pathlib import Path
 from typing import List, Dict, Any
 from pypdf import PdfReader
+import pikepdf
 
 from app.core.paths import Paths
 
 logger = logging.getLogger(__name__)
+
+
+def _fallback_normalize_pdf(input_path: Path, output_path: Path) -> None:
+    """Create a clean rewritten PDF when full PDF/A tooling is unavailable."""
+    with pikepdf.open(str(input_path)) as pdf:
+        pdf.save(
+            str(output_path),
+            compress_streams=True,
+            object_stream_mode=pikepdf.ObjectStreamMode.generate,
+        )
 
 class PdfToPdfAService:
     
@@ -35,21 +46,12 @@ class PdfToPdfAService:
         
         results = []
 
-        if not shutil.which("ocrmypdf"):
-            return {
-                "success": False,
-                "request_id": request_id,
-                "results": [{
-                    "status": "failed",
-                    "pdfa_compliant": False,
-                    "message": "ocrmypdf is not installed or not found in PATH. Please install it: pip install ocrmypdf"
-                }]
-            }
-
         if pdfa_standard not in self.supported_standards:
             pdfa_standard = "pdfa-2b"
             
         ocr_profile = self.supported_standards[pdfa_standard]
+        has_ocrmypdf = bool(shutil.which("ocrmypdf"))
+        has_tesseract = bool(shutil.which("tesseract"))
         
         for filename in filenames:
             input_path = upload_dir / filename
@@ -82,6 +84,33 @@ class PdfToPdfAService:
             stem = input_path.stem
             output_filename = f"{stem}_pdfa.pdf"
             output_path = output_dir / output_filename
+
+            if not has_ocrmypdf or not has_tesseract:
+                try:
+                    _fallback_normalize_pdf(input_path, output_path)
+                    results.append({
+                        "original_filename": filename,
+                        "pdf_filename": output_filename,
+                        "status": "success",
+                        "pdfa_compliant": False,
+                        "pdfa_standard": pdfa_standard,
+                        "message": "Generated a normalized archival PDF fallback because OCRmyPDF/Tesseract is unavailable on this machine."
+                    })
+                except Exception as e:
+                    logger.error(f"Fallback PDF/A conversion failed for {filename}: {e}", exc_info=True)
+                    missing = []
+                    if not has_ocrmypdf:
+                        missing.append("ocrmypdf")
+                    if not has_tesseract:
+                        missing.append("tesseract")
+                    results.append({
+                        "original_filename": filename,
+                        "status": "failed",
+                        "pdfa_compliant": False,
+                        "pdfa_standard": pdfa_standard,
+                        "message": f"PDF/A tooling missing: {', '.join(missing)}.",
+                    })
+                continue
             
             # Execute ocrmypdf in PDF/A conversion mode without OCR
             cmd = [

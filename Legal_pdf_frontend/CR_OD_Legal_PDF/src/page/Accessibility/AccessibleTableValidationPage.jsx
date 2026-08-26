@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BackgroundWatermark } from '../../components/crodlegalpdf';
 import { ArrowLeft, Upload, Filter, CheckCircle2, AlertTriangle, XCircle, Download, Sparkles, Table } from 'lucide-react';
 
-var API_BASE = (import.meta.env.VITE_API_URL || '') + '/api/accessibility';
+var API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '') + '/api/accessibility';
 
 var STATUS_COLORS = { PASS: '#10b981', FAILED: '#ef4444', 'NEEDS REVIEW': '#f59e0b', NEEDS_REVIEW: '#f59e0b' };
 

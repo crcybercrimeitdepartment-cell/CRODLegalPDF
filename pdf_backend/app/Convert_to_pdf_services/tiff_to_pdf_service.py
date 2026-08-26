@@ -402,7 +402,10 @@ class TiffToPdfService:
         output_filename = f"{pdf_path.stem}_pdfa.pdf"
         output_path = pdf_path.parent / output_filename
         
+        import sys
         cmd = [
+            sys.executable,
+            "-m",
             "ocrmypdf",
             "--skip-text",
             "--output-type", ocr_profile,

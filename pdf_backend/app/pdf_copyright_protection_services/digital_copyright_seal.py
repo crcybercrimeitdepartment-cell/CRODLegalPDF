@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
+# pyrefly: ignore [missing-import]
 import fitz  # PyMuPDF
 
 from app.core.paths import Paths
@@ -47,7 +48,27 @@ class DigitalCopyrightSealService:
             raise ValueError("Invalid PDF document (missing %PDF header).")
 
     def _compute_hash(self, pdf_bytes: bytes) -> str:
-        return hashlib.sha256(pdf_bytes).hexdigest()
+        try:
+            doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+            content_hash = hashlib.sha256()
+            has_content = False
+            for page in doc:
+                text = page.get_text()
+                if text:
+                    content_hash.update(text.encode('utf-8'))
+                    has_content = True
+                for img in page.get_images(full=True):
+                    xref = img[0]
+                    base_image = doc.extract_image(xref)
+                    if base_image and "image" in base_image:
+                        content_hash.update(base_image["image"])
+                        has_content = True
+            doc.close()
+            if has_content:
+                return content_hash.hexdigest()
+            return hashlib.sha256(pdf_bytes).hexdigest()
+        except Exception:
+            return hashlib.sha256(pdf_bytes).hexdigest()
 
     def generate_seal(
         self,

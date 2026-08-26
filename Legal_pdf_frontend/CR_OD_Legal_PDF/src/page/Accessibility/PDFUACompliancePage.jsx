@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BackgroundWatermark } from '../../components/crodlegalpdf';
 import { ArrowLeft, FolderOpen, CheckCircle, AlertTriangle, XCircle, Shield, Lightbulb } from 'lucide-react';
 
-const API_BASE = (import.meta.env.VITE_API_URL || '') + '/api/accessibility';
+const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '') + '/api/accessibility';
 
 export default function PDFUACompliancePage({ onBack }) {
   var [documentId, setDocumentId] = useState(null);

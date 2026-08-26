@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Upload, FileText, X } from 'lucide-react';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '';
 
 export default function DuplicateCheckPage() {
     // ── State: Files ──────────────────────────────────────────────
@@ -324,9 +324,15 @@ export default function DuplicateCheckPage() {
             ` }} />
             
             <div className="wrap">
-
-
                 <div className="w-full max-w-3xl mx-auto px-4 sm:px-6 pb-6">
+                    <div className="text-center max-w-2xl mx-auto mt-8 mb-8 px-4">
+                        <h1 className="text-2xl sm:text-4xl font-black text-[#1e2a52] leading-tight mb-3">
+                            Duplicate Page Checker
+                        </h1>
+                        <p className="text-xs sm:text-sm text-slate-600 font-medium leading-relaxed">
+                            Analyze multiple PDF documents to automatically identify and clean up duplicate or near-duplicate pages.
+                        </p>
+                    </div>
                     <div className="bg-white rounded-3xl border border-slate-200/80 shadow-[0_8px_30px_rgba(0,0,0,0.04)] p-6 sm:p-10 mb-6">
                         {/* Dual Upload Zone */}
                     <input type="file" id="pdfFilesInput" accept=".pdf,application/pdf" multiple className="hidden" onChange={handleFileChange} />

@@ -13,6 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
+# pyrefly: ignore [missing-import]
 import fitz  # PyMuPDF
 
 from app.core.paths import Paths
@@ -149,8 +150,16 @@ class LicenseManagementService:
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
             meta = doc.metadata or {}
             raw = meta.get(METADATA_KEY) or ""
+            if raw:
+                pass
             if not raw:
                 raw = doc.xref_metadata(0).get(METADATA_KEY, "") if doc.xref_length() > 0 else ""
+            
+            kw = meta.get("keywords") or ""
+            import re
+            match = re.search(r"\[" + METADATA_KEY + r":\s*(.*?)\s*\]", kw)
+            raw = match.group(1) if match else raw
+            
             if raw:
                 try:
                     parsed = json.loads(raw)
@@ -217,11 +226,18 @@ class LicenseManagementService:
             doc.close()
             raise ValueError("PDF document is encrypted or password-protected.")
         license_json_str = json.dumps(cleaned, ensure_ascii=False)
-        doc.set_metadata({METADATA_KEY: license_json_str})
+        
+        current_meta = doc.metadata or {}
+        new_meta = dict(current_meta)
+        kw = new_meta.get("keywords") or ""
+        import re
+        kw = re.sub(r"\[" + METADATA_KEY + r":.*?\]", "", kw).strip()
+        kw += f" [{METADATA_KEY}: {license_json_str}]"
+        new_meta["keywords"] = kw.strip()
+        doc.set_metadata(new_meta)
         page = doc.new_page(width=612, height=792)
-        font = fitz.Font("helv")
         y = 50
-        page.insert_text(fitz.Point(50, y), "License Information", font=font, fontsize=16, color=(0, 0, 0))
+        page.insert_text(fitz.Point(50, y), "License Information", fontname="helv", fontsize=16, color=(0, 0, 0))
         y += 30
         for field in allowed_fields:
             val = cleaned.get(field, "")
@@ -231,7 +247,7 @@ class LicenseManagementService:
                 if y > 750:
                     page = doc.new_page(width=612, height=792)
                     y = 50
-                page.insert_text(fitz.Point(50, y), text, font=font, fontsize=10, color=(0.2, 0.2, 0.2))
+                page.insert_text(fitz.Point(50, y), text, fontname="helv", fontsize=10, color=(0.2, 0.2, 0.2))
                 y += 16
         out_dir = Paths.request_output(session_id)
         out_dir.mkdir(parents=True, exist_ok=True)

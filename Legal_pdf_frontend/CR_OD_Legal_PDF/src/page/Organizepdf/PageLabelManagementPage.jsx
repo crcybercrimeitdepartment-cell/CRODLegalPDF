@@ -9,8 +9,16 @@ export default function PageLabelManagementPage() {
   const [errorMsg, setErrorMsg] = useState(null);
   const [downloadUrl, setDownloadUrl] = useState(null);
   const [isDragOver, setIsDragOver] = useState(false);
-  
+  const [previewUrl, setPreviewUrl] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
+
+  // Settings
+  const [action, setAction] = useState('apply'); // apply | remove
+  const [startPage, setStartPage] = useState(1);
+  const [endPage, setEndPage] = useState(10);
+  const [style, setStyle] = useState('arabic'); // arabic, lroman, uroman, lalpha, ualpha
+  const [prefix, setPrefix] = useState('Page-');
+  const [startNum, setStartNum] = useState(1);
 
   const fileInputRef = useRef(null);
 
@@ -18,6 +26,8 @@ export default function PageLabelManagementPage() {
     if (f && f.type === 'application/pdf') {
       setFile(f);
       setErrorMsg(null);
+      const blob = new Blob([f], { type: 'application/pdf' });
+      setPreviewUrl(URL.createObjectURL(blob));
     } else {
       setErrorMsg('Please upload a valid PDF file.');
     }
@@ -54,11 +64,24 @@ export default function PageLabelManagementPage() {
 
       if (!uploadRes.ok) throw new Error('Upload failed.');
       const uploadData = await uploadRes.json();
-      
+
       // 2. Process
       const processForm = new FormData();
+      processForm.append('file', file);
       processForm.append('request_id', uploadData.request_id);
-      processForm.append('filename', uploadData.filename);
+      processForm.append('action', action);
+      
+      let rules = [];
+      if (action === 'apply') {
+         rules = [{
+             start_page: parseInt(startPage, 10),
+             end_page: parseInt(endPage, 10),
+             style: style,
+             prefix: prefix,
+             start_num: parseInt(startNum, 10)
+         }];
+      }
+      processForm.append('rules', JSON.stringify(rules));
 
       const processRes = await fetch(`${API_BASE_URL}/api/pdf/page-label-management/process`, {
         method: 'POST',
@@ -66,18 +89,19 @@ export default function PageLabelManagementPage() {
       });
 
       if (!processRes.ok) {
-        const err = await processRes.json().catch(() => ({}));
-        throw new Error(err.detail || `Processing failed (${processRes.status})`);
+        let errDesc = `Processing failed (${processRes.status})`;
+        try {
+          const err = await processRes.json();
+          errDesc = err.detail || errDesc;
+        } catch (_) {}
+        throw new Error(errDesc);
       }
 
       const processData = await processRes.json();
-      const dlUrl = processData.download_url;
-      if (!dlUrl) throw new Error('Download URL not provided by server.');
+      const dlUrl = `/api/pdf/page-label-management/download/${uploadData.request_id}/${processData.filename || uploadData.filename}`;
 
-      // 3. Prepare Download
       setDownloadUrl(`${API_BASE_URL}${dlUrl}`);
       setIsDone(true);
-      setShowPreview(true);
     } catch (err) {
       setErrorMsg(err.message || 'An unexpected error occurred.');
     } finally {
@@ -91,6 +115,7 @@ export default function PageLabelManagementPage() {
     setIsDone(false);
     setErrorMsg(null);
     setDownloadUrl(null);
+    setPreviewUrl(null);
     setShowPreview(false);
   };
 
@@ -99,7 +124,7 @@ export default function PageLabelManagementPage() {
       <div className="w-full max-w-4xl relative z-10">
         <div className="text-center max-w-2xl mx-auto mt-4 mb-8 px-4">
           <h1 className="text-3xl font-black text-[#1e2a52]">Page Label Management</h1>
-          <p className="text-sm text-slate-600 mt-2">Process your PDF using our advanced tools.</p>
+          <p className="text-sm text-slate-600 mt-2">Add or remove custom logical page numbers (e.g., i, ii, iii, 1, 2, 3).</p>
         </div>
 
         {!isProcessing && !isDone && (
@@ -128,6 +153,62 @@ export default function PageLabelManagementPage() {
                 {file ? file.name : 'Drag & Drop your PDF here'}
               </p>
             </div>
+
+            {file && (
+              <div className="mt-8 space-y-4 text-left bg-slate-50 p-6 rounded-xl border border-slate-200">
+                <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1">Action</label>
+                    <select className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" value={action} onChange={e => setAction(e.target.value)}>
+                        <option value="apply">Apply New Labels</option>
+                        <option value="remove">Remove All Labels</option>
+                    </select>
+                </div>
+
+                {action === 'apply' && (
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-1">Start Page</label>
+                            <input type="number" min="1" className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" value={startPage} onChange={e => setStartPage(e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-1">End Page</label>
+                            <input type="number" min="1" className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" value={endPage} onChange={e => setEndPage(e.target.value)} />
+                        </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-1">Style</label>
+                            <select className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" value={style} onChange={e => setStyle(e.target.value)}>
+                                <option value="arabic">1, 2, 3 (Arabic)</option>
+                                <option value="lroman">i, ii, iii (Lowercase Roman)</option>
+                                <option value="uroman">I, II, III (Uppercase Roman)</option>
+                                <option value="lalpha">a, b, c (Lowercase Letters)</option>
+                                <option value="ualpha">A, B, C (Uppercase Letters)</option>
+                                <option value="custom">Custom Prefix Only</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-1">Start Number</label>
+                            <input type="number" min="1" className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" value={startNum} onChange={e => setStartNum(e.target.value)} />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1">Prefix Text (Optional)</label>
+                        <input type="text" className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" value={prefix} onChange={e => setPrefix(e.target.value)} placeholder="e.g. 'Appendix A - '" />
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {file && previewUrl && (
+              <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50/50 overflow-hidden h-[400px] shadow-inner w-full">
+                  <iframe src={`${previewUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`} className="w-full h-full border-none" title="PDF Preview" />
+              </div>
+            )}
 
             <div className="text-center mt-8">
               <button

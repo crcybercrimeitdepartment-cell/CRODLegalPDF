@@ -85,58 +85,77 @@ export default function ReplacePDFPagesPage() {
   };
 
   const processFiles = async () => {
-    if (pdfFiles.length < 2) return;
+    if (pdfFiles.length < 2) {
+        alert("Please upload both Original PDF and Replacement PDF.");
+        return;
+    }
     setIsFlying(true);
 
     setTimeout(async () => {
         setIsProcessing(true);
         
         try {
-            const API_BASE_URL = (import.meta.env.VITE_BACKEND_URL || 'https://cr-od-legal-pdf-backend.onrender.com'); // Adjust if needed
+            const API_BASE_URL = import.meta.env.VITE_API_URL || ''; 
             
-            // 1. Upload original
-            const uploadForm = new FormData();
-            uploadForm.append('file', pdfFiles[0]);
-            const uploadRes = await fetch(`${API_BASE_URL}/api/pdf/replace-pdf-pages/upload`, {
-                method: 'POST',
-                body: uploadForm
-            });
-            if (!uploadRes.ok) throw new Error('Upload failed for original PDF');
-            const uploadData = await uploadRes.json();
-            
-            // 2. Upload replacement and process
+            let mapping = [];
+            let replPage = 1;
+            const parts = (settings.rangeText || '1').split(',').map(p => p.trim());
+            for (const part of parts) {
+                if (!part) continue;
+                if (part.includes('-')) {
+                    const [start, end] = part.split('-').map(Number);
+                    if (!isNaN(start) && !isNaN(end)) {
+                        for (let i = start; i <= end; i++) {
+                            mapping.push({ orig: i, repl: replPage++ });
+                        }
+                    }
+                } else {
+                    const num = Number(part);
+                    if (!isNaN(num)) {
+                        mapping.push({ orig: num, repl: replPage++ });
+                    }
+                }
+            }
+            if (mapping.length === 0) {
+                 mapping = [{ orig: 1, repl: 1 }]; 
+            }
+
             const processForm = new FormData();
-            processForm.append('request_id', uploadData.request_id);
-            processForm.append('filename', uploadData.filename);
-            processForm.append('replacement', pdfFiles[1]);
-            processForm.append('pages', settings.rangeText || '1');
+            processForm.append('orig_file', pdfFiles[0]);
+            processForm.append('repl_file', pdfFiles[1]);
+            processForm.append('mapping', JSON.stringify(mapping));
+            processForm.append('size_mode', settings.sizeMode);
+            processForm.append('preserve_bookmarks', settings.preserveBookmarks);
+            processForm.append('preserve_metadata', settings.preserveMetadata);
             
             const processRes = await fetch(`${API_BASE_URL}/api/pdf/replace-pdf-pages/process`, {
                 method: 'POST',
                 body: processForm
             });
             
-            if (!processRes.ok) throw new Error('Processing failed');
+            if (!processRes.ok) {
+                let errDesc = 'Processing failed';
+                try {
+                    const err = await processRes.json();
+                    errDesc = err.detail || errDesc;
+                } catch (_) {}
+                throw new Error(errDesc);
+            }
+            
             const processData = await processRes.json();
             
-            const fileRes = await fetch(`${API_BASE_URL}${processData.download_url}`);
-            if (!fileRes.ok) throw new Error('Failed to download file');
-            
-            const blob = await fileRes.blob();
-            const dlUrl = window.URL.createObjectURL(blob);
-            setDownloadUrl(dlUrl);
+            if (processData.download_url) {
+                const fileRes = await fetch(`${API_BASE_URL}${processData.download_url}`);
+                if (!fileRes.ok) throw new Error('Failed to download file');
+                const blob = await fileRes.blob();
+                const dlUrl = window.URL.createObjectURL(blob);
+                setDownloadUrl(dlUrl);
+            }
             
             setIsSuccess(true);
         } catch (err) {
             console.error('API Error:', err);
-            // Mock backend processing delay
-            setTimeout(() => {
-                if (pdfFiles.length > 0) {
-                    const blob = new Blob([pdfFiles[0]], { type: 'application/pdf' });
-                    setDownloadUrl(URL.createObjectURL(blob));
-                }
-                setIsSuccess(true);
-            }, 2600);
+            alert('Failed to replace pages: ' + err.message);
         } finally {
             setIsProcessing(false);
             setIsFlying(false);
@@ -347,16 +366,11 @@ export default function ReplacePDFPagesPage() {
               <h3 className="text-2xl font-bold text-[#1e2a52] mb-3">Done!</h3>
               <p className="text-slate-500 text-center mb-8 font-medium">Pages have been successfully replaced.</p>
               
-              {downloadUrl ? (
-                <a href={downloadUrl} download="Replaced.pdf" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 px-8 rounded-xl shadow-lg shadow-emerald-200 transition-all active:scale-95 flex justify-center items-center gap-2 mb-3 cursor-pointer">
+              {downloadUrl && (
+                <a href={downloadUrl} download="replaced.pdf" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 px-8 rounded-xl shadow-lg shadow-emerald-200 transition-all active:scale-95 flex justify-center items-center gap-2 mb-3">
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                  Download
+                  Download Replaced PDF
                 </a>
-              ) : (
-                <button onClick={() => alert('Downloading...')} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 px-8 rounded-xl shadow-lg shadow-emerald-200 transition-all active:scale-95 flex justify-center items-center gap-2 mb-3">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                  Download
-                </button>
               )}
               
               <button onClick={resetAll} className="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-4 px-8 rounded-xl shadow-lg shadow-slate-300 transition-all active:scale-95 flex justify-center items-center gap-2">

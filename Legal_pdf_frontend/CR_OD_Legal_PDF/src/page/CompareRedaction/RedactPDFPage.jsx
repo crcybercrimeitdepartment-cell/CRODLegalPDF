@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Upload } from 'lucide-react';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '';
 
 export default function RedactPdfPage() {
     // ── State: Upload ──────────────────────────────────────────────
@@ -387,6 +387,14 @@ export default function RedactPdfPage() {
 
             <div className="wrap">
                 <div className="w-full max-w-3xl mx-auto px-4 sm:px-6 pb-6">
+                    <div className="text-center max-w-2xl mx-auto mt-8 mb-8 px-4">
+                        <h1 className="text-2xl sm:text-4xl font-black text-[#1e2a52] leading-tight mb-3">
+                            Secure PDF Redaction
+                        </h1>
+                        <p className="text-xs sm:text-sm text-slate-600 font-medium leading-relaxed">
+                            Permanently wipe sensitive information, PII, and financial data from your PDF documents with irreversible redaction.
+                        </p>
+                    </div>
                     <div className="bg-white rounded-3xl border border-slate-200/80 shadow-[0_8px_30px_rgba(0,0,0,0.04)] p-6 sm:p-10 mb-6">
                         {/* File Upload Area */}
                         <input type="file" id="pdfFileInput" accept=".pdf,application/pdf" className="hidden" onChange={handleFileChange} />
