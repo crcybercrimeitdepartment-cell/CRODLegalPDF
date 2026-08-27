@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BackgroundWatermark } from '../../components/crodlegalpdf';
 import { ArrowLeft, Mic, MicOff, Upload, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Maximize2, Volume2 } from 'lucide-react';
 
-var API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '') + '/api/accessibility';
+var API_BASE = (import.meta.env.VITE_API_URL || '') + '/api/accessibility';
 
 var commandGroups = [
   {
@@ -23,6 +23,7 @@ export default function VoiceNavigationPage({ onBack }) {
   var [documentId, setDocumentId] = useState(null);
   var [fileStatus, setFileStatus] = useState('');
   var [fileName, setFileName] = useState('');
+  var [pagePreviews, setPagePreviews] = useState([]);
 
   var [isListening, setIsListening] = useState(false);
   var [micStatus, setMicStatus] = useState('Voice Navigation is off');
@@ -157,6 +158,8 @@ export default function VoiceNavigationPage({ onBack }) {
         setDocumentId(data.document_id);
         setFileName(data.filename);
         setTotalPages(data.page_count || 1);
+        setCurrentPage(1);
+        setPagePreviews(data.page_previews || []);
         setFileStatus('\u2713 Loaded: ' + data.filename + ' (' + data.page_count + ' pages)');
       } else {
         setFileStatus('\u2717 Upload error: ' + (data.error || 'Failed'));
@@ -237,7 +240,18 @@ export default function VoiceNavigationPage({ onBack }) {
                       <strong className="block text-slate-600 mb-1">{group.title}</strong>
                       <div className="flex flex-wrap gap-1.5">
                         {group.commands.map(function (cmd, ci) {
-                          return <span key={ci} className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold font-mono border border-slate-200 bg-white text-slate-800 whitespace-nowrap shadow-sm hover:border-purple-400 hover:bg-purple-50 hover:text-purple-600 transition">{cmd}</span>;
+                          return (
+                            <button 
+                              key={ci} 
+                              onClick={function() {
+                                setTranscript(cmd);
+                                processCommand(cmd);
+                              }}
+                              className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold font-mono border border-slate-200 bg-white text-slate-800 whitespace-nowrap shadow-sm hover:border-purple-400 hover:bg-purple-50 hover:text-purple-600 transition cursor-pointer"
+                            >
+                              {cmd}
+                            </button>
+                          );
                         })}
                       </div>
                     </div>
@@ -286,10 +300,19 @@ export default function VoiceNavigationPage({ onBack }) {
                     <p className="text-sm">Upload a PDF and enable voice commands to navigate hands-free.</p>
                   </div>
                 ) : (
-                  <div className="text-center">
-                    <p className="text-sm text-slate-600 font-semibold">{fileName}</p>
-                    <p className="text-xs text-slate-400 mt-1">Page {currentPage} of {totalPages} | Zoom {zoomLevel}%</p>
-                    <p className="text-xs text-slate-400 mt-2 italic">Voice commands active - speak to navigate</p>
+                  <div className="relative flex flex-col items-center gap-4 transition-transform origin-top" style={{ transform: `scale(${zoomLevel / 100})` }}>
+                    {pagePreviews.find(function(p) { return p.page_number === currentPage; }) ? (
+                      <img 
+                        src={pagePreviews.find(function(p) { return p.page_number === currentPage; }).thumbnail_base64} 
+                        className="shadow-sm border border-slate-200"
+                        alt={`Page ${currentPage}`} 
+                      />
+                    ) : (
+                      <div className="text-center p-8 border border-slate-200 rounded-lg bg-slate-50">
+                        <p className="text-sm text-slate-600 font-semibold">{fileName}</p>
+                        <p className="text-xs text-slate-400 mt-1">Page {currentPage} of {totalPages}</p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

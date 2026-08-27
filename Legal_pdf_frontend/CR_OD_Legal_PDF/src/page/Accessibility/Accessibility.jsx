@@ -28,18 +28,6 @@ import ReadingRulerPage from './ReadingRulerPage';
 import FocusModePage from './FocusModePage';
 import KeyboardShortcutCustomizationPage from './KeyboardShortcutCustomizationPage';
 import VoiceNavigationPage from './VoiceNavigationPage';
-import SpeechtoTextInputPage from './SpeechtoTextInputPage';
-import CaptionsTranscriptSupportPage from './CaptionsTranscriptSupportPage';
-import SignLanguageVideoSupportPage from './SignLanguageVideoSupportPage';
-import AccessibleTableValidationPage from './AccessibleTableValidationPage';
-import HeadingStructureValidationPage from './HeadingStructureValidationPage';
-import LanguageDetectionDocumentLanguageTaggingPage from './LanguageDetectionDocumentLanguageTaggingPage';
-import SkipNavigationLinksPage from './SkipNavigationLinksPage';
-import AccessibilityReportExportPage from './AccessibilityReportExportPage';
-import WCAGComplianceCheckerPage from './WCAGComplianceCheckerPage';
-import ReadingOrderEditorPage from './ReadingOrderEditorPage';
-import AccessibilityFixSuggestionsAIPage from './AccessibilityFixSuggestionsAIPage';
-import AccessibilityComplianceDashboardPage from './AccessibilityComplianceDashboardPage';
 
 import {
   ArrowRight,
@@ -142,41 +130,6 @@ function KeyboardShortcutCustomizationIcon({ className = "w-8 h-8" }) { return <
 // 20. Voice Navigation - Control document reading, scrolling, and page turning using voice commands
 function VoiceNavigationIcon({ className = "w-8 h-8" }) { return <Mic className={className} />; }
 
-// 21. Speech-to-Text Input - Dictate text directly into PDF forms, sticky notes, and comment boxes
-function SpeechToTextInputIcon({ className = "w-8 h-8" }) { return <FileAudio className={className} />; }
-
-// 22. Captions & Transcript Support - Embedded closed captions and synchronized text transcripts for audio/video PDFs
-function CaptionsTranscriptSupportIcon({ className = "w-8 h-8" }) { return <MessageSquare className={className} />; }
-
-// 23. Sign Language Video Support - Embed sign language video interpretations directly alongside document content
-function SignLanguageVideoSupportIcon({ className = "w-8 h-8" }) { return <Video className={className} />; }
-
-// 24. Accessible Table Validation - Verify data tables have designated headers, row IDs, and screen-reader structure
-function AccessibleTableValidationIcon({ className = "w-8 h-8" }) { return <Grid className={className} />; }
-
-// 25. Heading Structure Validation - Audit H1-H6 heading hierarchy to ensure intuitive navigation for screen readers
-function HeadingStructureValidationIcon({ className = "w-8 h-8" }) { return <Layers className={className} />; }
-
-// 26. Language Detection & Document Language Tagging - Auto-detect document language and set correct ISO language tags
-function LanguageDetectionDocumentTaggingIcon({ className = "w-8 h-8" }) { return <Globe className={className} />; }
-
-// 27. Skip Navigation Links - Insert quick jump links to allow screen readers to skip headers and jump to content
-function SkipNavigationLinksIcon({ className = "w-8 h-8" }) { return <Link className={className} />; }
-
-// 28. Accessibility Report Export - Generate and download detailed PDF/HTML audit reports on compliance status
-function AccessibilityReportExportIcon({ className = "w-8 h-8" }) { return <Download className={className} />; }
-
-// 29. WCAG Compliance Checker - Comprehensive audit against WCAG 2.1 AA and AAA accessibility guidelines
-function WcagComplianceCheckerIcon({ className = "w-8 h-8" }) { return <Scale className={className} />; }
-
-// 30. Reading Order Editor - Visual drag-and-drop tool to fix broken reading sequences for screen readers
-function ReadingOrderEditorIcon({ className = "w-8 h-8" }) { return <ListOrdered className={className} />; }
-
-// 31. Accessibility Fix Suggestions (AI) - AI-powered automated suggestions to fix missing alt-text, tags, and contrast issues
-function AccessibilityFixSuggestionsAiIcon({ className = "w-8 h-8" }) { return <Wand2 className={className} />; }
-
-// 32. Accessibility Compliance Dashboard - Organization-wide analytics tracking document accessibility scores
-function AccessibilityComplianceDashboardIcon({ className = "w-8 h-8" }) { return <Monitor className={className} />; }
 
 /* ==========================================================================
    2. HEADER COMPONENT WITH FLOATING BRANDING & DECORATIVE ANIMATIONS
@@ -574,102 +527,6 @@ export const ACCESSIBILITY_TOOLS = [
     icon: VoiceNavigationIcon,
     bgColor: colors[9].bg,
     iconColor: colors[9].icon
-  },
-  {
-    id: 'speech-to-text-input',
-    name: 'Speech-to-Text Input',
-    description: 'Dictate text directly into PDF forms, sticky notes, and comment boxes.',
-    icon: SpeechToTextInputIcon,
-    bgColor: colors[0].bg,
-    iconColor: colors[0].icon
-  },
-  {
-    id: 'captions-transcript-support',
-    name: 'Captions & Transcript Support',
-    description: 'Embedded closed captions and synchronized text transcripts for audio/video PDFs.',
-    icon: CaptionsTranscriptSupportIcon,
-    bgColor: colors[1].bg,
-    iconColor: colors[1].icon
-  },
-  {
-    id: 'sign-language-video-support',
-    name: 'Sign Language Video Support',
-    description: 'Embed sign language video interpretations directly alongside document content.',
-    icon: SignLanguageVideoSupportIcon,
-    bgColor: colors[2].bg,
-    iconColor: colors[2].icon
-  },
-  {
-    id: 'accessible-table-validation',
-    name: 'Accessible Table Validation',
-    description: 'Verify data tables have designated headers, row IDs, and screen-reader structure.',
-    icon: AccessibleTableValidationIcon,
-    bgColor: colors[3].bg,
-    iconColor: colors[3].icon
-  },
-  {
-    id: 'heading-structure-validation',
-    name: 'Heading Structure Validation',
-    description: 'Audit H1-H6 heading hierarchy to ensure intuitive navigation for screen readers.',
-    icon: HeadingStructureValidationIcon,
-    bgColor: colors[4].bg,
-    iconColor: colors[4].icon
-  },
-  {
-    id: 'language-detection-tagging',
-    name: 'Language Detection & Document Language Tagging',
-    description: 'Auto-detect document language and set correct ISO language tags for text-to-speech.',
-    icon: LanguageDetectionDocumentTaggingIcon,
-    bgColor: colors[5].bg,
-    iconColor: colors[5].icon
-  },
-  {
-    id: 'skip-navigation-links',
-    name: 'Skip Navigation Links',
-    description: 'Insert quick jump links to allow screen readers to skip headers and jump to content.',
-    icon: SkipNavigationLinksIcon,
-    bgColor: colors[6].bg,
-    iconColor: colors[6].icon
-  },
-  {
-    id: 'accessibility-report-export',
-    name: 'Accessibility Report Export',
-    description: 'Generate and download detailed PDF/HTML audit reports on compliance status.',
-    icon: AccessibilityReportExportIcon,
-    bgColor: colors[7].bg,
-    iconColor: colors[7].icon
-  },
-  {
-    id: 'wcag-compliance-checker',
-    name: 'WCAG Compliance Checker',
-    description: 'Comprehensive audit against WCAG 2.1 AA and AAA accessibility guidelines.',
-    icon: WcagComplianceCheckerIcon,
-    bgColor: colors[8].bg,
-    iconColor: colors[8].icon
-  },
-  {
-    id: 'reading-order-editor',
-    name: 'Reading Order Editor',
-    description: 'Visual drag-and-drop tool to fix broken reading sequences for screen readers.',
-    icon: ReadingOrderEditorIcon,
-    bgColor: colors[9].bg,
-    iconColor: colors[9].icon
-  },
-  {
-    id: 'accessibility-fix-suggestions-ai',
-    name: 'Accessibility Fix Suggestions (AI)',
-    description: 'AI-powered automated suggestions to fix missing alt-text, tags, and contrast issues.',
-    icon: AccessibilityFixSuggestionsAiIcon,
-    bgColor: colors[0].bg,
-    iconColor: colors[0].icon
-  },
-  {
-    id: 'accessibility-compliance-dashboard',
-    name: 'Accessibility Compliance Dashboard',
-    description: 'Organization-wide analytics tracking document accessibility scores and compliance status.',
-    icon: AccessibilityComplianceDashboardIcon,
-    bgColor: colors[1].bg,
-    iconColor: colors[1].icon
   }
 ];
 
@@ -727,18 +584,6 @@ export function AccessibilityPage({ onBack, searchQuery = "" }) {
       case 'focus-mode': return <FocusModePage tool={selectedTool} onBack={handleBack} />;
       case 'keyboard-shortcut-customization': return <KeyboardShortcutCustomizationPage tool={selectedTool} onBack={handleBack} />;
       case 'voice-navigation': return <VoiceNavigationPage tool={selectedTool} onBack={handleBack} />;
-      case 'speech-to-text-input': return <SpeechtoTextInputPage tool={selectedTool} onBack={handleBack} />;
-      case 'captions-transcript-support': return <CaptionsTranscriptSupportPage tool={selectedTool} onBack={handleBack} />;
-      case 'sign-language-video-support': return <SignLanguageVideoSupportPage tool={selectedTool} onBack={handleBack} />;
-      case 'accessible-table-validation': return <AccessibleTableValidationPage tool={selectedTool} onBack={handleBack} />;
-      case 'heading-structure-validation': return <HeadingStructureValidationPage tool={selectedTool} onBack={handleBack} />;
-      case 'language-detection-tagging': return <LanguageDetectionDocumentLanguageTaggingPage tool={selectedTool} onBack={handleBack} />;
-      case 'skip-navigation-links': return <SkipNavigationLinksPage tool={selectedTool} onBack={handleBack} />;
-      case 'accessibility-report-export': return <AccessibilityReportExportPage tool={selectedTool} onBack={handleBack} />;
-      case 'wcag-compliance-checker': return <WCAGComplianceCheckerPage tool={selectedTool} onBack={handleBack} />;
-      case 'reading-order-editor': return <ReadingOrderEditorPage tool={selectedTool} onBack={handleBack} />;
-      case 'accessibility-fix-suggestions-ai': return <AccessibilityFixSuggestionsAIPage tool={selectedTool} onBack={handleBack} />;
-      case 'accessibility-compliance-dashboard': return <AccessibilityComplianceDashboardPage tool={selectedTool} onBack={handleBack} />;
       default: return <ToolWorkspace tool={selectedTool} onBack={handleBack} />;
     }
   }

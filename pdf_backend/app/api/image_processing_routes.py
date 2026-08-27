@@ -13,8 +13,11 @@ import shutil
 import io
 from pathlib import Path
 from typing import List, Dict, Any, Optional
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks, Request
+# pyrefly: ignore [missing-import]
 from fastapi.responses import FileResponse, JSONResponse
+# pyrefly: ignore [missing-import]
 from PIL import Image
 from app.core.config import settings
 from app.core.paths import UPLOADS_DIR
@@ -23,7 +26,9 @@ from app.utils.cleanup import delete_file
 from app.utils.validators import validate_file_extension, validate_file_size
 from app.utils.filename import sanitize_filename
 
+# pyrefly: ignore [missing-import]
 from PIL import Image, ImageDraw, ImageFont, ImageColor, ImageOps
+# pyrefly: ignore [missing-import]
 from PIL import Image, ImageOps
 from app.core.paths import TEMP_PROCESSING_DIR
 from app.core.paths import UPLOADS_DIR, DOWNLOADS_DIR
@@ -131,22 +136,34 @@ from app.schemas.sharpen_schema import SharpenRequestState
 from app.schemas.upscale_schema import UpscaleRequestState
 from app.schemas.watermark_schema import WatermarkSettings
 from app.schemas.white_balance_schema import WhiteBalanceRequestState
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, File, UploadFile, Form, HTTPException
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, BackgroundTasks, Form
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, File, UploadFile, HTTPException, Form
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Form
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Request
+# pyrefly: ignore [missing-import]
 from fastapi.responses import FileResponse
+# pyrefly: ignore [missing-import]
 from fastapi.responses import JSONResponse, FileResponse
+# pyrefly: ignore [missing-import]
 from pydantic import BaseModel
+# pyrefly: ignore [missing-import]
 from pydantic import ValidationError
 from typing import List
 from typing import List, Dict
 from typing import List, Optional
 from typing import Optional
 import json
+# pyrefly: ignore [missing-import]
 import pymupdf as fitz
 
 logger = logging.getLogger(__name__)
@@ -175,8 +192,11 @@ import shutil
 import io
 from pathlib import Path
 from typing import List, Dict, Any, Optional
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks, Request
+# pyrefly: ignore [missing-import]
 from fastapi.responses import FileResponse, JSONResponse
+# pyrefly: ignore [missing-import]
 from PIL import Image
 
 from app.core.config import settings
@@ -3399,9 +3419,9 @@ async def apply_correction_route(request: PerspectiveApplyRequest):
         with open(source_path, "rb") as f:
             content = f.read()
             
-        processed_bytes = apply_perspective_correction(content, corners_dict)
-        
         ext = ".png" if source_path.suffix.lower() == ".png" else ".jpg"
+        processed_bytes = apply_perspective_correction(content, corners_dict, ext)
+        
         result_path = job_dir / f"result{ext}"
         
         with open(result_path, "wb") as f:
@@ -3455,9 +3475,9 @@ async def batch_apply(request: PerspectiveBatchRequest, bg_tasks: BackgroundTask
                     content = f.read()
                     
                 corners_dict = [{"x": c.x, "y": c.y} for c in job.corners]
-                processed_bytes = apply_perspective_correction(content, corners_dict)
-                
                 ext = ".png" if source_path.suffix.lower() == ".png" else ".jpg"
+                processed_bytes = apply_perspective_correction(content, corners_dict, ext)
+                
                 filename = f"perspective_{job.job_id[:8]}{ext}"
                 zf.writestr(filename, processed_bytes)
                 successful += 1
@@ -4370,13 +4390,13 @@ async def download_zip_endpoint(filename: str):
 # ==============================================================================
 # FEATURE: Deskew
 # ==============================================================================
-TEMP_PROCESSING_DIR = Path("temp_processing/deskew")
-TEMP_PROCESSING_DIR.mkdir(parents=True, exist_ok=True)
+DESKEW_TEMP_DIR = Path("temp_processing/deskew")
+DESKEW_TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
 DESKEW_DESKEW_MAX_FILE_SIZE_MB = 15
 
 def get_deskew_job_dir(job_id: str) -> Path:
-    return TEMP_PROCESSING_DIR / job_id
+    return DESKEW_TEMP_DIR / job_id
 
 def cleanup_deskew_job(job_id: str):
     job_dir = get_deskew_job_dir(job_id)

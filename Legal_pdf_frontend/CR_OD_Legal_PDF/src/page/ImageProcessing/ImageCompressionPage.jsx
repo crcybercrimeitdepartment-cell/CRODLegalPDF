@@ -149,54 +149,64 @@ const CompressImages = ({ tool, onBack }) => {
 
   // --- PROCESSING LOGIC ---
   const applyCompression = async () => {
-    if (!activeFile || !canvasRef.current) return;
+    if (!activeFile) return;
     setIsProcessing(true);
     
     try {
-      // Simulate backend processing time
-      await new Promise(r => setTimeout(r, 700));
+      const formData = new FormData();
+      formData.append('file', activeFile.file);
       
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
+      const stateObj = {
+        level: compressLevel
+      };
       
-      const img = new Image();
-      img.src = activeFile.dataUrl;
-      await new Promise(r => img.onload = r);
+      formData.append('state', JSON.stringify(stateObj));
       
-      canvas.width = activeFile.origW;
-      canvas.height = activeFile.origH;
-      ctx.drawImage(img, 0, 0);
+      const response = await fetch('/api/v1/images/compress', {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || 'Image compression failed on the server.');
+      }
+      
+      const blob = await response.blob();
+      
+      // Parse backend stats if available
+      let stats = null;
+      const statsHeader = response.headers.get('X-Compress-Stats');
+      if (statsHeader) {
+        try {
+          stats = JSON.parse(statsHeader);
+        } catch(e) {}
+      }
+      
+      const compressedSize = blob.size;
+      const savingsPercent = Math.max(0, Math.round((1 - (compressedSize / activeFile.size)) * 100));
+      
+      const finalStats = stats || {
+        orig_size_bytes: activeFile.size,
+        compressed_size_bytes: compressedSize,
+        savings_percent: savingsPercent
+      };
 
-      // Determine quality based on level
-      let qualityScore = 0.8;
-      if (compressLevel === 'low') qualityScore = 0.9;
-      if (compressLevel === 'high') qualityScore = 0.4;
+      setUploadedFiles(prev => {
+        const up = [...prev];
+        up[activeIndex].processedBlob = blob;
+        up[activeIndex].processedUrl = URL.createObjectURL(blob);
+        up[activeIndex].stats = finalStats;
+        return up;
+      });
       
-      // Use WEBP to preserve alpha while compressing
-      canvas.toBlob((blob) => {
-        const compressedSize = blob.size;
-        const savingsPercent = Math.max(1, Math.round((1 - (compressedSize / activeFile.size)) * 100));
-
-        setUploadedFiles(prev => {
-          const up = [...prev];
-          up[activeIndex].processedBlob = blob;
-          up[activeIndex].processedUrl = URL.createObjectURL(blob);
-          up[activeIndex].stats = {
-            orig_size_bytes: activeFile.size,
-            compressed_size_bytes: compressedSize,
-            savings_percent: savingsPercent
-          };
-          return up;
-        });
-        
-        setIsProcessing(false);
-        setShowOriginal(false);
-      }, 'image/webp', qualityScore);
+      setIsProcessing(false);
+      setShowOriginal(false);
       
     } catch(err) {
       console.error("Compression Error:", err);
       setIsProcessing(false);
-      alert("Failed to compress image.");
+      alert("Failed to compress image: " + err.message);
     }
   };
 
@@ -216,12 +226,25 @@ const CompressImages = ({ tool, onBack }) => {
     if (processed.length === 1) {
       const idx = uploadedFiles.findIndex(f => f.id === processed[0].id);
       setActiveIndex(idx);
+      
+      // get actual format extension from the file if we can, else default to .jpg
+      const origExt = processed[0].name.split('.').pop().toLowerCase();
+      const ext = ['png', 'webp', 'jpeg', 'jpg', 'bmp', 'tiff'].includes(origExt) ? origExt : 'jpg';
+      
       const nameWithoutExt = processed[0].name.replace(/\.[^/.]+$/, "");
-      setTimeout(() => downloadFile(processed[0].processedBlob, `compressed_${nameWithoutExt}.webp`), 100);
+      setTimeout(() => downloadFile(processed[0].processedBlob, `compressed_${nameWithoutExt}.${ext}`), 100);
       return;
     }
     
-    alert("Batch ZIP saving requires the backend API which is currently simulated.");
+    // Fallback: download all processed files individually
+    processed.forEach((item, i) => {
+      setTimeout(() => {
+        const origExt = item.name.split('.').pop().toLowerCase();
+        const ext = ['png', 'webp', 'jpeg', 'jpg', 'bmp', 'tiff'].includes(origExt) ? origExt : 'jpg';
+        const nameWithoutExt = item.name.replace(/\.[^/.]+$/, "");
+        downloadFile(item.processedBlob, `compressed_${nameWithoutExt}.${ext}`);
+      }, i * 300);
+    });
   };
 
   return (

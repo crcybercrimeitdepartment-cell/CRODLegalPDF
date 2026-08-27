@@ -102,35 +102,40 @@ const BgRemoveImages = ({ tool, onBack }) => {
     setIsProcessing(true);
     
     try {
-      // Background removal is inherently a backend AI task.
-      // For frontend fallback simulation, we just simulate network delay and return the image as PNG.
-      await new Promise(r => setTimeout(r, 1500));
+      const formData = new FormData();
+      formData.append('file', activeFile.file);
       
-      const canvas = document.createElement('canvas');
-      const img = new Image();
-      img.src = activeFile.dataUrl;
-      await new Promise(r => img.onload = r);
+      const stateObj = {
+        feather: feather,
+        threshold: threshold
+      };
       
-      canvas.width = activeFile.origW;
-      canvas.height = activeFile.origH;
-      const ctx = canvas.getContext('2d');
+      formData.append('state', JSON.stringify(stateObj));
       
-      ctx.drawImage(img, 0, 0);
+      const response = await fetch('/api/v1/images/bg-remove', {
+        method: 'POST',
+        body: formData
+      });
       
-      canvas.toBlob((blob) => {
-        setUploadedFiles(prev => {
-          const up = [...prev];
-          up[activeIndex].processedBlob = blob;
-          up[activeIndex].processedUrl = URL.createObjectURL(blob);
-          return up;
-        });
-        setIsProcessing(false);
-      }, 'image/png'); // Force PNG for transparency
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || 'Background removal failed on the server.');
+      }
+      
+      const blob = await response.blob();
+      
+      setUploadedFiles(prev => {
+        const up = [...prev];
+        up[activeIndex].processedBlob = blob;
+        up[activeIndex].processedUrl = URL.createObjectURL(blob);
+        return up;
+      });
+      setIsProcessing(false);
       
     } catch(err) {
       console.error("BG Remove Error:", err);
       setIsProcessing(false);
-      alert("Failed to remove background.");
+      alert("Failed to remove background: " + err.message);
     }
   };
 
@@ -155,7 +160,14 @@ const BgRemoveImages = ({ tool, onBack }) => {
       return;
     }
     
-    alert("Batch ZIP saving requires the backend API which is currently simulated.");
+    // Fallback: download all processed files individually since batch endpoint takes files as input
+    // which we already processed here.
+    processed.forEach((item, i) => {
+      setTimeout(() => {
+        const nameWithoutExt = item.name.replace(/\.[^/.]+$/, "");
+        downloadFile(item.processedBlob, `bg_removed_${nameWithoutExt}.png`);
+      }, i * 300);
+    });
   };
 
   return (

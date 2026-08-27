@@ -10,7 +10,7 @@ const LANGUAGES = [
   { value: 'de-DE', label: 'German' },
 ];
 
-const API_BASE_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '');
+const API_BASE_URL = (import.meta.env.VITE_API_URL || '');
 
 const COLOR_MODES = [
   { id: 'normal', label: 'Default' },
@@ -25,6 +25,7 @@ const STEPS = ['Upload PDF', 'Configure', 'Process', 'Review', 'Download'];
 export default function AccessibilitySupportPage({ onBack }) {
   const [docId, setDocId] = useState(null);
   const [fileName, setFileName] = useState('');
+  const [uploadedFile, setUploadedFile] = useState(null);
   const [totalPages, setTotalPages] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [isDragging, setIsDragging] = useState(false);
@@ -54,35 +55,71 @@ export default function AccessibilitySupportPage({ onBack }) {
 
   const markDone = useCallback((s) => setCompletedSteps(prev => new Set([...prev, s])), []);
 
-  const runAudit = useCallback(async (id) => {
-    if (!id) return;
-    try {
-      const r = await fetch(`${API_BASE_URL}/api/accessibility/` + id + '/audit');
-      if (!r.ok) return;
-      const a = await r.json();
-      setAuditScore(a.compliance_score || 0);
-      setComplianceLevel(a.compliance_level || 'Unknown');
-      setStats({
-        title: a.has_title ? 'Present' : 'Missing',
-        lang: a.has_language ? 'Present' : 'Missing',
-        alt: a.images_missing_alt || 0,
-        images: a.total_images || 0,
-      });
-      setAuditIssues(a.issues || []);
-      const imgs = a.detected_images || [];
-      setAltTexts(imgs.map(function (img) { return { page: img.page_number, index: img.image_index, alt: img.alt_text || '' }; }));
-    } catch (e) { console.error(e); }
+  const postPdf = useCallback(async function (endpoint, file) {
+    if (!file) return null;
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      let message = `Request failed (${response.status})`;
+      try {
+        const errorData = await response.json();
+        message = errorData.detail || errorData.message || message;
+      } catch (parseError) {
+        try {
+          const text = await response.text();
+          if (text) message = text;
+        } catch (textError) {
+          console.error(textError);
+        }
+      }
+      throw new Error(message);
+    }
+
+    return response.json();
   }, []);
 
-  const fetchSpeech = useCallback(async (id) => {
-    if (!id) return;
+  const runAudit = useCallback(async (file) => {
+    if (!file) return;
     try {
-      const r = await fetch(`${API_BASE_URL}/api/accessibility/` + id + '/screen-reader');
-      if (!r.ok) return;
-      const d = await r.json();
-      setSpeechText(d.full_document_speech || 'No readable text content.');
+      const [checkerData, dashboardData] = await Promise.all([
+        postPdf('/api/accessibility/checker', file),
+        postPdf('/api/accessibility/compliance-dashboard', file),
+      ]);
+      const issues = checkerData?.accessibility_check?.issues || [];
+      const dashboard = dashboardData?.compliance_dashboard || {};
+      setAuditScore(dashboard.score ?? checkerData?.accessibility_check?.score ?? 0);
+      setComplianceLevel(dashboard.compliance_level || 'Unknown');
+      setStats({
+        title: dashboard.has_title ? 'Present' : 'Missing',
+        lang: dashboard.has_language ? 'Present' : 'Missing',
+        alt: dashboard.images_missing_alt || 0,
+        images: dashboard.total_images || 0,
+      });
+      setAuditIssues(issues.map(function (issue) {
+        return {
+          category: issue.area || 'Accessibility',
+          message: issue.message,
+          severity: issue.severity === 'warning' ? 'Warning' : 'Critical',
+          recommendation: issue.recommendation || 'Review the document structure and metadata.',
+        };
+      }));
+      const imgs = dashboard.detected_images || [];
+      setAltTexts(imgs.map(function (img) { return { page: img.page_number, index: img.image_index, alt: img.alt_text || '' }; }));
     } catch (e) { console.error(e); }
-  }, []);
+  }, [postPdf]);
+
+  const fetchSpeech = useCallback(async (file) => {
+    if (!file) return;
+    try {
+      const data = await postPdf('/api/accessibility/read-aloud', file);
+      setSpeechText(data?.read_aloud?.full_text || 'No readable text content.');
+    } catch (e) { console.error(e); }
+  }, [postPdf]);
 
   var renderPdfPage = useCallback(function (pdf, num) {
     if (!pdf) return;
@@ -116,26 +153,41 @@ export default function AccessibilitySupportPage({ onBack }) {
     setUploadError('');
     setUploadStatus('Uploading ' + file.name + '...');
     setFileName(file.name);
+    setUploadedFile(file);
     try { loadPdf(await file.arrayBuffer()); } catch (e) { console.error(e); }
 
     var fd = new FormData();
     fd.append('file', file);
     try {
       var r = await fetch(`${API_BASE_URL}/api/accessibility/upload`, { method: 'POST', body: fd });
-      if (!r.ok) { var e = await r.json(); throw new Error(e.detail || 'Upload failed'); }
+      if (!r.ok) {
+        let message = 'Upload failed';
+        try {
+          var e = await r.json();
+          message = e.detail || e.message || message;
+        } catch (parseError) {
+          console.error(parseError);
+          try {
+            var text = await r.text();
+            if (text) message = text;
+          } catch (textError) {
+            console.error(textError);
+          }
+        }
+        throw new Error(message);
+      }
       var d = await r.json();
       setDocId(d.document_id);
-      setTotalPages(d.page_count);
-      setUploadStatus('Uploaded: ' + d.filename + ' (' + d.page_count + ' pages)');
+      setUploadStatus('Uploaded: ' + file.name + ' (' + (pdfDocRef.current?.numPages || totalPages || 1) + ' pages)');
       setActiveStep(1);
       markDone(0);
-      await runAudit(d.document_id);
-      await fetchSpeech(d.document_id);
+      await runAudit(file);
+      await fetchSpeech(file);
     } catch (err) {
       setUploadError(err.message);
       setUploadStatus('');
     }
-  }, [loadPdf, runAudit, fetchSpeech, markDone]);
+  }, [loadPdf, runAudit, fetchSpeech, markDone, totalPages]);
 
   useEffect(function () {
     if (pdfDocRef.current) renderPdfPage(pdfDocRef.current, currentPage);
@@ -251,7 +303,7 @@ export default function AccessibilitySupportPage({ onBack }) {
               <div className="bg-white/10 rounded-lg px-3 py-2"><div className="text-[10px] text-white/60">Missing Alt Text</div><div className="text-sm font-bold">{stats.alt}</div></div>
             </div>
           </div>
-          <button onClick={function () { runAudit(docId); }} disabled={!docId} className="px-4 py-2 bg-white/20 hover:bg-white/30 disabled:opacity-40 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap">Re-Run Audit</button>
+          <button onClick={function () { runAudit(uploadedFile); fetchSpeech(uploadedFile); }} disabled={!uploadedFile} className="px-4 py-2 bg-white/20 hover:bg-white/30 disabled:opacity-40 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap">Re-Run Audit</button>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-xl p-5 flex flex-col gap-4">

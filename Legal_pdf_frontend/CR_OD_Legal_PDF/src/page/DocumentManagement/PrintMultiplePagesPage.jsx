@@ -69,45 +69,28 @@ export default function PrintMultiplePagesPage({ onBack }) {
     setPreviewData(null);
     setDownloadUrl('');
 
-    // Simulated network delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
     try {
-      // Logic for preview mock
-      let cols = 2, rows = 2;
-      const pps = parseInt(pagesPerSheet);
-      if (pps === 2) { cols = 2; rows = 1; }
-      else if (pps === 6) { cols = 3; rows = 2; }
-      else if (pps === 8) { cols = 4; rows = 2; }
-      else if (pps === 9) { cols = 3; rows = 3; }
-      else if (pps === 16) { cols = 4; rows = 4; }
+      const fd = new FormData();
+      fd.append('file', selectedFile);
+      fd.append('page_range', pageRange);
+      fd.append('pages_per_sheet', pagesPerSheet);
+      fd.append('paper_size', paperSize);
+      fd.append('orientation', orientation);
+      fd.append('order', pageOrder);
+      fd.append('margin_mm', marginMm);
+      fd.append('spacing_mm', spacingMm);
+      fd.append('custom_width_mm', customWidth);
+      fd.append('custom_height_mm', customHeight);
 
-      const sheetW = 595;
-      const sheetH = 842;
-      const margin = 30;
-      const spacing = 15;
-      
-      const availableW = sheetW - (2 * margin) - ((cols - 1) * spacing);
-      const availableH = sheetH - (2 * margin) - ((rows - 1) * spacing);
-      
-      const cellW = availableW / cols;
-      const cellH = availableH / rows;
-
-      setPreviewData({
-        grid: { cols, rows, n_sheets: 3 },
-        n_pages: 12, // mock total pages
-        paper_size: paperSize,
-        orientation: orientation === 'auto' ? 'portrait' : orientation,
-        
-        sheet_width_pt: sheetW,
-        sheet_height_pt: sheetH,
-        
-        // derived for UI sizing
-        cell_width_pt: cellW,
-        cell_height_pt: cellH,
-        margin_pt: margin,
-        spacing_pt: spacing
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8002';
+      const res = await fetch(`${API_BASE_URL}/document-management/multi-page-sheet/preview`, {
+        method: 'POST',
+        body: fd
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to generate preview.');
+      
+      setPreviewData(data);
     } catch (err) {
       setError('Error generating preview: ' + err.message);
     } finally {
@@ -122,11 +105,31 @@ export default function PrintMultiplePagesPage({ onBack }) {
     setError('');
     setDownloadUrl('');
 
-    // Simulated network delay
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
     try {
-      setDownloadUrl('#mock-download');
+      const fd = new FormData();
+      fd.append('file', selectedFile);
+      fd.append('page_range', pageRange);
+      fd.append('pages_per_sheet', pagesPerSheet);
+      fd.append('paper_size', paperSize);
+      fd.append('orientation', orientation);
+      fd.append('order', pageOrder);
+      fd.append('margin_mm', marginMm);
+      fd.append('spacing_mm', spacingMm);
+      fd.append('show_borders', showBorders);
+      fd.append('show_crop_marks', showCropMarks);
+      fd.append('custom_width_mm', customWidth);
+      fd.append('custom_height_mm', customHeight);
+      fd.append('output_name', '');
+
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8002';
+      const res = await fetch(`${API_BASE_URL}/document-management/multi-page-sheet/generate`, {
+        method: 'POST',
+        body: fd
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to generate PDF.');
+      
+      setDownloadUrl(data.download_url);
     } catch (err) {
       setError('Error generating PDF: ' + err.message);
     } finally {
@@ -135,10 +138,6 @@ export default function PrintMultiplePagesPage({ onBack }) {
   };
 
   const handleDownload = () => {
-    if (downloadUrl === '#mock-download') {
-      alert('Mock download started.');
-      return;
-    }
     if (downloadUrl) {
       const a = document.createElement('a');
       a.href = apiClient.getFullUrl(downloadUrl);

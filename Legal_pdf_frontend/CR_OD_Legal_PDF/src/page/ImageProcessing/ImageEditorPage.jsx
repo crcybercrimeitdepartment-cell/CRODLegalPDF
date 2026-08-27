@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   UploadCloud, Crop, RotateCw, SlidersHorizontal, Wand2, Type,
   ZoomIn, ZoomOut, Maximize, RotateCcw, Undo2, Redo2, Zap, ArrowLeft, Image as ImageIcon,
@@ -14,8 +15,8 @@ const ImageEditorResultModal = ({
 }) => {
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[1000] p-4">
+  return createPortal(
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
       <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-[750px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
 
         
@@ -61,7 +62,8 @@ const ImageEditorResultModal = ({
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -827,7 +829,7 @@ const ImageEditor = ({ tool, onBack }) => {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("settings", JSON.stringify(editState));
+      formData.append("state", JSON.stringify(editState));
 
       const API_BASE_URL = window.API_BASE_URL || "/api/v1/images";
       const response = await fetch(`${API_BASE_URL}/editor`, {

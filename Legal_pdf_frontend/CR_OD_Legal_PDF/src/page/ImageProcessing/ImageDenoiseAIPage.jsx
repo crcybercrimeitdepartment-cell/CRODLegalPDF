@@ -281,7 +281,7 @@ const ImageDenoiseAI = ({ tool, onBack }) => {
             {/* Main Image Stage */}
             <div 
               ref={containerRef}
-              className="flex-1 relative flex items-center justify-center overflow-hidden bg-white border border-slate-200 rounded-xl shadow-xl"
+              className="flex-1 relative flex items-center justify-center overflow-hidden bg-white border border-slate-200 rounded-xl shadow-xl min-h-[300px]"
               style={{ backgroundImage: 'radial-gradient(rgba(0, 0, 0, 0.04) 1px, transparent 0)', backgroundSize: '16px 16px' }}
               onWheel={handleWheel}
               onMouseDown={handleMouseDown}

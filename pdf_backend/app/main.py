@@ -22,6 +22,8 @@ from app.lifespan import lifespan
 from app.middleware.exception_handler import register_exception_handler
 from app.middleware.request_id import RequestIDMiddleware
 from app.middleware.timing import TimingMiddleware
+from app.api import routes
+logger = logging.getLogger(__name__)
 
 logging.basicConfig(
     level=settings.LOG_LEVEL.upper(),

@@ -10,6 +10,7 @@ import { Upload, Plus, FileText, Download, CheckCircle2, ArrowLeft, X, AlertCirc
 import apiClient from '../../api/apiClient';
 
 export default function AddAttachmentsPage({ onBack }) {
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8002';
   const [selectedPdf, setSelectedPdf] = useState(null);
   const [stagedFiles, setStagedFiles] = useState([]);
   const [existingAttachments, setExistingAttachments] = useState([]);
@@ -78,7 +79,7 @@ export default function AddAttachmentsPage({ onBack }) {
     fd.append('file', file);
 
     try {
-      const res = await fetch('/document-management/file-attachments/analyze', { method: 'POST', body: fd });
+      const res = await fetch(`${API_BASE_URL}/document-management/file-attachments/analyze`, { method: 'POST', body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Failed to analyze PDF.');
       setExistingAttachments(data.attachments || []);
@@ -125,22 +126,24 @@ export default function AddAttachmentsPage({ onBack }) {
     setSuccess('');
     setDownloadUrl('');
 
-    // Convert staged files to base64
+    // Convert staged files to base64 using FileReader
     const attData = [];
+    
+    const fileToBase64 = (file) => new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
     for (let i = 0; i < stagedFiles.length; i++) {
       const f = stagedFiles[i];
-      const bytes = await f.arrayBuffer();
-      // Use btoa safely for binary data
-      const uint8Array = new Uint8Array(bytes);
-      let binaryString = '';
-      for (let j = 0; j < uint8Array.length; j++) {
-        binaryString += String.fromCharCode(uint8Array[j]);
-      }
+      const b64 = await fileToBase64(f);
       attData.push({
         name: f.name,
         filename: f.name,
         description: '',
-        bytes_b64: btoa(binaryString)
+        bytes_b64: b64
       });
     }
 
@@ -151,7 +154,7 @@ export default function AddAttachmentsPage({ onBack }) {
     const minDelay = new Promise(resolve => setTimeout(resolve, 3500));
 
     try {
-      const res = await fetch('/document-management/add-attachments/process', { method: 'POST', body: fd });
+      const res = await fetch(`${API_BASE_URL}/document-management/add-attachments/process`, { method: 'POST', body: fd });
       const data = await res.json();
       
       await minDelay;
@@ -167,10 +170,9 @@ export default function AddAttachmentsPage({ onBack }) {
       setDownloadUrl(data.download_url);
     } catch (err) {
       await minDelay;
-      console.warn('Backend process failed, mocking process', err);
-      setStagedFiles([]);
-      setSuccess('Attachment(s) embedded successfully! (Mocked)');
-      setDownloadUrl('#');
+      console.error('Backend process failed', err);
+      setError(err.message || 'Failed to add attachments.');
+      setSuccess('');
     } finally {
       setIsProcessing(false);
     }

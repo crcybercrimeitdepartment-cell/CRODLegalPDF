@@ -93,8 +93,8 @@ class TiffToPdfService:
         # Check if any enhancement is requested
         has_enhancement = (
             config.get("auto_contrast") or 
-            config.get("brightness") != 100 or 
-            config.get("sharpness") != 100 or 
+            config.get("brightness", 100) != 100 or 
+            config.get("sharpness", 100) != 100 or 
             config.get("grayscale") or 
             config.get("noise_reduction") or
             config.get("bg_cleanup") or
@@ -105,13 +105,13 @@ class TiffToPdfService:
             return img_pil
             
         # First, apply Pillow-based basic enhancements
-        if config.get("brightness") != 100:
+        if config.get("brightness", 100) != 100:
             enhancer = ImageEnhance.Brightness(img_pil)
-            img_pil = enhancer.enhance(config["brightness"] / 100.0)
+            img_pil = enhancer.enhance(config.get("brightness", 100) / 100.0)
             
-        if config.get("sharpness") != 100:
+        if config.get("sharpness", 100) != 100:
             enhancer = ImageEnhance.Sharpness(img_pil)
-            img_pil = enhancer.enhance(config["sharpness"] / 100.0)
+            img_pil = enhancer.enhance(config.get("sharpness", 100) / 100.0)
             
         if config.get("auto_contrast"):
             from PIL import ImageOps
@@ -310,7 +310,10 @@ class TiffToPdfService:
                         file_writer.add_page(reader.pages[0])
                         
             except Exception as e:
-                logger.error(f"Error processing {filename}: {e}")
+                import traceback
+                with open("tiff_error_log.txt", "w") as err_f:
+                    err_f.write(traceback.format_exc())
+                logger.error(f"Error processing {filename}: {e}\n{traceback.format_exc()}")
                 continue
                 
             if output_mode == "separate":
@@ -402,10 +405,7 @@ class TiffToPdfService:
         output_filename = f"{pdf_path.stem}_pdfa.pdf"
         output_path = pdf_path.parent / output_filename
         
-        import sys
         cmd = [
-            sys.executable,
-            "-m",
             "ocrmypdf",
             "--skip-text",
             "--output-type", ocr_profile,

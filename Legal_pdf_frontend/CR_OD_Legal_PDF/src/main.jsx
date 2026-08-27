@@ -51,7 +51,10 @@ if (API_BASE_URL) {
     }
   }, true); // Use capture phase
 }
+
 // -----------------------------------------
+
+// Mount the React component tree into the HTML root element
 
 // Mount the React component tree into the HTML root element
 createRoot(document.getElementById('root')).render(

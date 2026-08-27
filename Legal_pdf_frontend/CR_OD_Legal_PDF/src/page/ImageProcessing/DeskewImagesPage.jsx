@@ -68,39 +68,39 @@ const DeskewImages = ({ tool, onBack }) => {
     });
   };
 
-  // --- 2. DETECTION (Simulated) ---
+  const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
+  // --- 2. DETECTION ---
   const startDetection = async (item) => {
-    // Set initial detecting state for the individual item
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'detecting' } : i));
 
     try {
-      await new Promise(r => setTimeout(r, 1000 + Math.random() * 1000)); // Simulate varied API delay
-      
-      // Simulate detection logic (70% skewed, 30% no_skew)
-      const hasSkew = Math.random() > 0.3;
-      let angle = 0;
-      let status = 'no_skew';
+      const formData = new FormData();
+      formData.append("file", item.file);
 
-      if (hasSkew) {
-        // Random angle between -15 and +15, excluding near-zero
-        angle = (Math.random() * 30 - 15);
-        if (Math.abs(angle) < 0.5) angle = (angle > 0 ? 2 : -2);
-        status = 'detected';
-      }
+      const res = await fetch(`${API_BASE_URL}/api/v1/images/deskew/detect`, {
+        method: "POST",
+        body: formData
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.detail || "Detection failed");
 
       setItems(prev => prev.map(i => {
         if (i.id === item.id) {
           return { 
             ...i, 
-            status, 
-            angle, 
-            previewUrl: i.originalUrl, // For mock, we use CSS rotate on the original URL to simulate deskew
-            showCropped: status === 'detected' // Auto switch to 'After' view if detected
+            status: data.detection_status, 
+            angle: data.angle, 
+            originalUrl: `${API_BASE_URL}${data.original_url}`,
+            previewUrl: data.deskewed_preview_url ? `${API_BASE_URL}${data.deskewed_preview_url}` : null,
+            showCropped: data.detection_status === 'detected' || data.detection_status === 'low_confidence',
+            job_id: data.job_id
           };
         }
         return i;
       }));
     } catch(err) {
+      console.error(err);
       setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'failed' } : i));
     }
   };
@@ -109,28 +109,38 @@ const DeskewImages = ({ tool, onBack }) => {
     if (activeItem) startDetection(activeItem);
   };
 
-  // --- 3. APPLY DESKEW (Simulated) ---
+  // --- 3. APPLY DESKEW ---
   const applyDeskew = async () => {
-    if (!activeItem || activeItem.status !== 'detected') return;
+    if (!activeItem || (activeItem.status !== 'detected' && activeItem.status !== 'low_confidence')) return;
     lockUI("Applying deskew transform...");
     
     setItems(prev => prev.map(i => i.id === activeId ? { ...i, status: 'processing' } : i));
 
     try {
-      await new Promise(r => setTimeout(r, 1200)); // Simulate process
+      const res = await fetch(`${API_BASE_URL}/api/v1/images/deskew/apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job_id: activeItem.job_id,
+          angle: activeItem.angle
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.detail || "Apply deskew failed");
       
       setItems(prev => prev.map(i => {
         if (i.id === activeId) {
           return { 
             ...i, 
             status: 'completed',
-            finalUrl: i.originalUrl, // Mock final URL (relies on CSS to hold the rotation state for now)
+            finalUrl: `${API_BASE_URL}${data.preview_url}`,
             showCropped: true
           };
         }
         return i;
       }));
     } catch(err) {
+      console.error(err);
       setItems(prev => prev.map(i => i.id === activeId ? { ...i, status: 'failed' } : i));
     }
     
@@ -157,8 +167,28 @@ const DeskewImages = ({ tool, onBack }) => {
     document.body.removeChild(a);
   };
 
-  const downloadAllZip = () => {
-    alert("Simulated ZIP generation for processed files.");
+  const downloadAllZip = async () => {
+    const completedItems = items.filter(i => (i.status === 'completed' || i.status === 'no_skew') && i.job_id);
+    if (completedItems.length === 0) return alert("No valid images to download.");
+    
+    lockUI("Generating ZIP file...");
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/images/deskew/batch-apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jobs: completedItems.map(i => ({ job_id: i.job_id, angle: i.status === 'completed' ? i.angle : 0 }))
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.detail || "Batch process failed");
+      
+      downloadFile(`${API_BASE_URL}${data.download_url}`, "deskewed_images.zip");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to generate ZIP file.");
+    }
+    unlockUI();
   };
 
   // Stats
@@ -199,9 +229,8 @@ const DeskewImages = ({ tool, onBack }) => {
                 >
                   <div className="w-12 h-12 rounded overflow-hidden bg-slate-100 shrink-0 border border-slate-200 relative">
                     <img 
-                      src={item.originalUrl} 
-                      className="absolute inset-0 w-full h-full object-cover transition-transform duration-300" 
-                      style={{ transform: item.showCropped ? `rotate(${-item.angle}deg) scale(1.1)` : 'rotate(0deg)' }}
+                      src={item.showCropped ? (item.finalUrl || item.previewUrl || item.originalUrl) : item.originalUrl} 
+                      className="absolute inset-0 w-full h-full object-cover transition-opacity duration-300" 
                       alt="thumb" 
                     />
                   </div>
@@ -270,16 +299,11 @@ const DeskewImages = ({ tool, onBack }) => {
               ) : (
                 <div className="relative inline-flex items-center justify-center max-w-full max-h-full">
                   
-                  {/* Simulate Original Image visually skewed, or apply counter-rotation to deskew it */}
+                  {/* Show original or processed image based on toggle */}
                   <img 
-                    src={activeItem.originalUrl} 
+                    src={activeItem.showCropped ? (activeItem.finalUrl || activeItem.previewUrl || activeItem.originalUrl) : activeItem.originalUrl} 
                     alt="Active" 
-                    className="max-w-full max-h-[70vh] object-contain transition-all duration-700 shadow-2xl"
-                    style={{ 
-                      // If showing cropped (deskewed), we rotate by negative angle. 
-                      // To make it realistic, we also scale up slightly to hide corners like a real crop.
-                      transform: activeItem.showCropped ? `rotate(${-activeItem.angle}deg) scale(1.05)` : 'rotate(0deg) scale(1)'
-                    }}
+                    className={`max-w-full max-h-[70vh] object-contain transition-all duration-500 ${activeItem.showCropped ? 'shadow-[0_0_30px_rgba(56,189,248,0.2)]' : 'shadow-2xl'}`}
                   />
 
                   {/* Processing Overlay */}

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BackgroundWatermark } from '../../components/crodlegalpdf';
 import { ArrowLeft, Search, RotateCcw, X, CheckCheck, Keyboard, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
 
-var API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '') + '/api/accessibility';
+var API_BASE = (import.meta.env.VITE_API_URL || '') + '/api/accessibility';
 
 var DEFAULT_SHORTCUTS = [
   { action_id: 'nav_next_page', action_name: 'Next Page', description: 'Navigate to next page in document', category: 'Navigation', default_key: 'ArrowRight' },

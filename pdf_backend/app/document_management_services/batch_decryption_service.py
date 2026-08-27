@@ -201,6 +201,7 @@ class BatchDecryptionService:
                     "output_filename": out_name,
                     "original_size": len(file_bytes),
                     "decrypted_size": len(decrypted_bytes),
+                    "download_url": f"/document-management/batch-decryption/download-file/{session_id}/{out_name}"
                 })
 
             except pikepdf.PasswordError:

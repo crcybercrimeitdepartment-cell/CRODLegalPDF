@@ -2,6 +2,7 @@ import logging
 import uuid
 import zipfile
 from pathlib import Path
+# pyrefly: ignore [missing-import]
 from PIL import Image
 
 from app.schemas.resize_schema import ResizeRequestState

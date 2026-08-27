@@ -2,6 +2,15 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Upload, ArrowLeft, X, AlertCircle, Edit3, Image as ImageIcon, Type, Download, CheckCircle2, FileText, Move } from 'lucide-react';
 import apiClient from '../../api/apiClient';
 
+import { Document, Page, pdfjs } from 'react-pdf';
+import 'react-pdf/dist/Page/AnnotationLayer.css';
+import 'react-pdf/dist/Page/TextLayer.css';
+
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url,
+).toString();
+
 export default function BatchWatermarkPage({ onBack }) {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -13,7 +22,6 @@ export default function BatchWatermarkPage({ onBack }) {
 
   const fileInputRef = useRef(null);
   const imageInputRef = useRef(null);
-  const canvasRef = useRef(null);
 
   // Watermark Settings
   const [wmType, setWmType] = useState('text'); // 'text' or 'image'
@@ -28,6 +36,7 @@ export default function BatchWatermarkPage({ onBack }) {
   
   // Image
   const [imagePreview, setImagePreview] = useState('');
+  const [imageFile, setImageFile] = useState(null);
   
   // Common
   const [opacity, setOpacity] = useState(50);
@@ -38,6 +47,17 @@ export default function BatchWatermarkPage({ onBack }) {
   const [position, setPosition] = useState('Center');
   const [pages, setPages] = useState('all');
   const [customPages, setCustomPages] = useState('');
+
+  // Interactive Preview State
+  const [previewIndex, setPreviewIndex] = useState(0);
+  const [numPages, setNumPages] = useState(null);
+  const [pageWidth, setPageWidth] = useState(0);
+  const [pageHeight, setPageHeight] = useState(0);
+  
+  const [customXRatio, setCustomXRatio] = useState(0.5);
+  const [customYRatio, setCustomYRatio] = useState(0.5);
+  const [isDraggingWm, setIsDraggingWm] = useState(false);
+  const overlayRef = useRef(null);
 
   const formatBytes = (bytes) => {
     if (bytes === 0) return '0 B';
@@ -70,110 +90,110 @@ export default function BatchWatermarkPage({ onBack }) {
   const clearAllFiles = () => {
     setSelectedFiles([]);
     setResults(null);
+    setPreviewIndex(0);
   };
 
   const handleImageUpload = (e) => {
     const file = e.target.files?.[0];
     if (file && file.type.startsWith('image/')) {
+      setImageFile(file);
       const url = URL.createObjectURL(file);
       setImagePreview(url);
     }
   };
 
-  // Canvas Preview logic
+  const onDocumentLoadSuccess = ({ numPages }) => {
+    setNumPages(numPages);
+  };
+
+  const onPageLoadSuccess = (pageInfo) => {
+    setPageWidth(pageInfo.width);
+    setPageHeight(pageInfo.height);
+  };
+
+  // Map presets to ratios for preview
+  const getPresetRatios = (pos) => {
+    switch (pos) {
+      case 'Top Left': return { x: 0.1, y: 0.1 };
+      case 'Top Center': return { x: 0.5, y: 0.1 };
+      case 'Top Right': return { x: 0.9, y: 0.1 };
+      case 'Center Left': return { x: 0.1, y: 0.5 };
+      case 'Center': return { x: 0.5, y: 0.5 };
+      case 'Center Right': return { x: 0.9, y: 0.5 };
+      case 'Bottom Left': return { x: 0.1, y: 0.9 };
+      case 'Bottom Center': return { x: 0.5, y: 0.9 };
+      case 'Bottom Right': return { x: 0.9, y: 0.9 };
+      default: return { x: 0.5, y: 0.5 };
+    }
+  };
+
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    const width = 450;
-    const height = 600;
-    canvas.width = width;
-    canvas.height = height;
-
-    // Draw page background
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, width, height);
-
-    // Draw dummy text lines to look like a document
-    ctx.fillStyle = '#e2e8f0';
-    for(let i = 0; i < 16; i++) {
-      const y = 80 + i * 30;
-      const w = (i % 5 === 0) ? 250 : 350;
-      ctx.fillRect(50, y, w, 12);
+    if (position !== 'Custom') {
+      const { x, y } = getPresetRatios(position);
+      setCustomXRatio(x);
+      setCustomYRatio(y);
     }
+  }, [position]);
+
+  const handlePointerDown = (e) => {
+    if (position !== 'Custom') setPosition('Custom');
+    setIsDraggingWm(true);
+    e.target.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e) => {
+    if (!isDraggingWm || !overlayRef.current) return;
+    const rect = overlayRef.current.getBoundingClientRect();
+    let x = e.clientX - rect.left;
+    let y = e.clientY - rect.top;
     
-    // Draw Document Title/Header
-    ctx.font = '800 28px "Inter", sans-serif';
-    ctx.fillStyle = '#cbd5e1';
-    ctx.textAlign = 'center';
-    ctx.fillText('DOCUMENT PREVIEW', width / 2, 280);
+    // Clamp to bounds
+    x = Math.max(0, Math.min(x, rect.width));
+    y = Math.max(0, Math.min(y, rect.height));
 
-    // Draw the filename of the first uploaded file at the bottom
-    if (selectedFiles.length > 0) {
-      ctx.font = '600 14px "Inter", sans-serif';
-      ctx.fillStyle = '#64748b';
-      ctx.textAlign = 'center';
-      
-      const fileName = selectedFiles[0].name;
-      const displaytext = fileName.length > 40 ? fileName.substring(0, 40) + '...' : fileName;
-      
-      ctx.fillText(`Previewing: ${displaytext}`, width / 2, height - 30);
-    }
+    setCustomXRatio(x / rect.width);
+    setCustomYRatio(y / rect.height);
+  };
 
-    // Draw Watermark
-    ctx.save();
-    
-    // Determine position coordinates
-    let x = width / 2;
-    let y = height / 2;
-    const margin = 70;
-
-    if (position.includes('Top')) y = margin;
-    if (position.includes('Bottom')) y = height - margin;
-    if (position.includes('Left')) x = margin;
-    if (position.includes('Right')) x = width - margin;
-
-    ctx.translate(x, y);
-    ctx.rotate((rotation * Math.PI) / 180);
-    ctx.globalAlpha = opacity / 100;
-
-    if (wmType === 'text') {
-      const styleBold = isBold ? 'bold ' : '';
-      const styleItalic = isItalic ? 'italic ' : '';
-      ctx.font = `${styleBold}${styleItalic}${fontSize * scale}px ${fontFamily}`;
-      ctx.fillStyle = fontColor;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(text, 0, 0);
-    } else if (wmType === 'image' && imagePreview) {
-      const img = new Image();
-      img.src = imagePreview;
-      img.onload = () => {
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate((rotation * Math.PI) / 180);
-        ctx.globalAlpha = opacity / 100;
-        
-        // Base scale for image to fit reasonably, then apply user scale
-        const baseW = 150;
-        const ratio = img.height / img.width;
-        const finalW = baseW * scale;
-        const finalH = finalW * ratio;
-        
-        ctx.drawImage(img, -finalW/2, -finalH/2, finalW, finalH);
-        ctx.restore();
-      };
-    }
-
-    ctx.restore();
-  }, [wmType, text, fontSize, fontColor, fontFamily, isBold, isItalic, imagePreview, opacity, rotation, scale, position, selectedFiles]);
+  const handlePointerUp = (e) => {
+    setIsDraggingWm(false);
+    e.target.releasePointerCapture(e.pointerId);
+  };
 
   const handleProcess = async () => {
     setIsProcessing(true);
     setResults(null);
     setError('');
     
-    setProgress({ percent: 10, text: 'Preparing watermarks...' });
+    setProgress({ percent: 10, text: 'Uploading files and preparing watermarks...' });
+    
+    const formData = new FormData();
+    selectedFiles.forEach(file => formData.append('files', file));
+    
+    formData.append('watermark_type', wmType);
+    if (wmType === 'text') {
+      formData.append('text', text);
+      formData.append('font_family', fontFamily);
+      formData.append('font_size', fontSize);
+      formData.append('font_color', fontColor);
+      formData.append('bold', isBold);
+      formData.append('italic', isItalic);
+    } else {
+      if (imageFile) formData.append('watermark_image', imageFile);
+      formData.append('image_scale', scale);
+      formData.append('image_opacity', opacity);
+      formData.append('image_rotation', rotation);
+    }
+    
+    formData.append('opacity', opacity);
+    formData.append('rotation', rotation);
+    formData.append('scale', scale);
+    formData.append('position', position);
+    if (position === 'Custom') {
+      formData.append('custom_x_ratio', customXRatio.toString());
+      formData.append('custom_y_ratio', customYRatio.toString());
+    }
+    formData.append('pages_selection', pages === 'custom' ? customPages : pages);
     
     const minDelay = new Promise(resolve => setTimeout(resolve, 3000));
     
@@ -181,33 +201,27 @@ export default function BatchWatermarkPage({ onBack }) {
       setTimeout(() => setProgress({ percent: 40, text: 'Applying watermarks to documents...' }), 800);
       setTimeout(() => setProgress({ percent: 80, text: 'Finalizing PDF generation...' }), 1800);
       
-      // Mock API delay
+      const res = await apiClient.uploadFiles('/api/document-management/batch-watermark', formData, false);
+      const data = res.data || res;
+      
       await minDelay;
-      
       setProgress({ percent: 100, text: 'Batch watermarking complete!' });
-      
+
       setTimeout(() => {
         setIsProcessing(false);
-        setResults({
-          total_files: selectedFiles.length,
-          successful_files: selectedFiles.length,
-          failed_files: 0,
-          failed_details: [],
-          has_download: true,
-          is_zip: true,
-          download_url: '#',
-          download_filename: 'Watermarked_Documents.zip'
-        });
+        setResults(data);
       }, 500);
     } catch(err) {
+      await minDelay;
       setIsProcessing(false);
-      setError('An error occurred during watermarking.');
+      setError(err?.response?.data?.detail || err.message || 'An error occurred during watermarking.');
     }
   };
 
   const handleReset = () => {
     setResults(null);
     setSelectedFiles([]);
+    setPreviewIndex(0);
   };
 
   return (
@@ -240,7 +254,7 @@ export default function BatchWatermarkPage({ onBack }) {
         
         .bw-table-wrap { max-height: 240px; overflow-y: auto; overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 10px; -webkit-overflow-scrolling: touch; }
         .bw-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; min-width: 400px; }
-        .bw-table th { background: #f8fafc; text-align: left; padding: 10px 14px; font-weight: 700; color: #475569; border-bottom: 1px solid #e2e8f0; position: sticky; top: 0; }
+        .bw-table th { background: #f8fafc; text-align: left; padding: 10px 14px; font-weight: 700; color: #475569; border-bottom: 1px solid #e2e8f0; position: sticky; top: 0; z-index: 10;}
         .bw-table td { padding: 10px 14px; border-bottom: 1px solid #f1f5f9; color: #1e293b; vertical-align: middle; }
         
         /* Form styles */
@@ -269,8 +283,14 @@ export default function BatchWatermarkPage({ onBack }) {
 
         /* Canvas Preview */
         .bw-preview-box { flex: 1; min-height: 400px; display: flex; align-items: center; justify-content: center; background: #f1f5f9; border-radius: 12px; border: 1px solid #e2e8f0; padding: 1rem; overflow: hidden; position: relative; }
-        .bw-canvas { box-shadow: 0 4px 20px rgba(0,0,0,0.1); max-width: 100%; max-height: 100%; object-fit: contain; background: #fff; }
+        .bw-pdf-container { position: relative; display: inline-block; box-shadow: 0 4px 20px rgba(0,0,0,0.1); background: #fff; max-width: 100%; max-height: 600px; overflow: hidden; user-select: none; }
+        .bw-pdf-container canvas { max-width: 100% !important; height: auto !important; }
         
+        .bw-wm-draggable { position: absolute; transform: translate(-50%, -50%); cursor: grab; user-select: none; touch-action: none; display: flex; align-items: center; justify-content: center; pointer-events: auto; }
+        .bw-wm-draggable:active { cursor: grabbing; }
+        .bw-wm-text { white-space: nowrap; }
+        .bw-wm-img { max-width: 150px; pointer-events: none; }
+
         /* Spinners & Results */
         .bw-res-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 1.5rem; }
         .bw-res-stat { padding: 12px; border-radius: 10px; text-align: center; font-weight: 800; }
@@ -345,15 +365,15 @@ export default function BatchWatermarkPage({ onBack }) {
                   </thead>
                   <tbody>
                     {selectedFiles.map((file, idx) => (
-                      <tr key={idx}>
+                      <tr key={idx} style={{ background: previewIndex === idx ? '#f5f3ff' : 'transparent' }}>
                         <td>{idx + 1}</td>
-                        <td style={{ fontWeight: 600, maxWidth: '250px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={file.name}>
-                          {file.name}
+                        <td style={{ fontWeight: previewIndex === idx ? 800 : 600, maxWidth: '250px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={file.name}>
+                          {file.name} {previewIndex === idx && <span style={{fontSize:'10px', marginLeft:'8px', background:'#7c3aed', color:'white', padding:'2px 6px', borderRadius:'10px'}}>Previewing</span>}
                         </td>
                         <td style={{ color: '#64748b', fontSize: '0.8rem' }}>{formatBytes(file.size)}</td>
                         <td style={{ textAlign: 'center' }}>
                           <button 
-                            onClick={(e) => { e.stopPropagation(); setSelectedFiles(prev => prev.filter((_, i) => i !== idx)); }} 
+                            onClick={(e) => { e.stopPropagation(); setSelectedFiles(prev => prev.filter((_, i) => i !== idx)); if(previewIndex >= selectedFiles.length -1) setPreviewIndex(0); }} 
                             style={{ background: '#fee2e2', color: '#ef4444', border: 'none', padding: '6px', borderRadius: '6px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                             title="Remove"
                           >
@@ -475,6 +495,9 @@ export default function BatchWatermarkPage({ onBack }) {
                           {pos}
                         </div>
                       ))}
+                      <div className={`bw-pos-btn ${position === 'Custom' ? 'active' : ''}`} onClick={() => setPosition('Custom')}>
+                        Custom (Drag)
+                      </div>
                     </div>
                   </div>
                   
@@ -506,13 +529,71 @@ export default function BatchWatermarkPage({ onBack }) {
               {!isProcessing && !results && (
                 <>
                   <div style={{ fontWeight: 800, color: '#1e293b', fontSize: '1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span>Watermark Live Preview</span>
-                    <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
-                      Approximate Representation
-                    </span>
+                    <span>Live Interactive Preview</span>
+                    {selectedFiles.length > 1 && (
+                      <select 
+                        style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.8rem', fontWeight: 600, maxWidth: '200px' }}
+                        value={previewIndex}
+                        onChange={(e) => setPreviewIndex(Number(e.target.value))}
+                      >
+                        {selectedFiles.map((f, i) => <option key={i} value={i}>{f.name}</option>)}
+                      </select>
+                    )}
                   </div>
                   <div className="bw-preview-box">
-                    <canvas ref={canvasRef} className="bw-canvas"></canvas>
+                    {selectedFiles[previewIndex] && (
+                        <div 
+                          className="bw-pdf-container" 
+                          ref={overlayRef}
+                          onPointerDown={handlePointerDown}
+                          onPointerMove={handlePointerMove}
+                          onPointerUp={handlePointerUp}
+                          onPointerLeave={handlePointerUp}
+                        >
+                            <Document
+                                file={selectedFiles[previewIndex]}
+                                onLoadSuccess={onDocumentLoadSuccess}
+                                loading={<div style={{padding:'2rem', color:'#64748b'}}>Loading PDF preview...</div>}
+                            >
+                                <Page 
+                                    pageNumber={1} 
+                                    renderTextLayer={false}
+                                    renderAnnotationLayer={false}
+                                    onLoadSuccess={onPageLoadSuccess}
+                                />
+                            </Document>
+                            
+                            {pageWidth > 0 && (
+                                <div 
+                                    className="bw-wm-draggable"
+                                    style={{
+                                        left: `${customXRatio * 100}%`,
+                                        top: `${customYRatio * 100}%`,
+                                        opacity: opacity / 100,
+                                        transform: `translate(-50%, -50%) rotate(-${rotation}deg) scale(${scale})`,
+                                    }}
+                                >
+                                    {wmType === 'text' ? (
+                                        <div className="bw-wm-text" style={{
+                                            fontFamily: fontFamily,
+                                            fontSize: `${fontSize}px`,
+                                            color: fontColor,
+                                            fontWeight: isBold ? 'bold' : 'normal',
+                                            fontStyle: isItalic ? 'italic' : 'normal',
+                                        }}>
+                                            {text}
+                                        </div>
+                                    ) : (
+                                        imagePreview && <img src={imagePreview} className="bw-wm-img" alt="watermark preview" />
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                  </div>
+                  <div style={{ textAlign: 'center', marginTop: '12px', fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
+                    <Move size={14} className="inline mr-1" />
+                    Drag the watermark to set custom placement
                   </div>
                 </>
               )}

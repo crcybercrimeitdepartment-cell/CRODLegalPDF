@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BackgroundWatermark } from '../../components/crodlegalpdf';
 import { ArrowLeft, Upload, Download, FileText, Glasses, Ruler, ChevronLeft, ChevronRight } from 'lucide-react';
 
-const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '') + '/api/accessibility';
+const API_BASE = (import.meta.env.VITE_API_URL || '') + '/api/accessibility';
 
 var fonts = [
   { value: 'OpenDyslexic', label: 'OpenDyslexic (Heavy-bottomed strokes)', css: "'OpenDyslexic', sans-serif" },
@@ -39,6 +39,8 @@ export default function DyslexiaReadingModePage({ onBack }) {
   var [enableRuler, setEnableRuler] = useState(false);
 
   var [formattedHtml, setFormattedHtml] = useState('');
+  var [formattedPages, setFormattedPages] = useState([]);
+  var [currentPreviewPage, setCurrentPreviewPage] = useState(1);
   var [totalWords, setTotalWords] = useState(0);
   var [readTime, setReadTime] = useState(0);
 
@@ -96,12 +98,29 @@ export default function DyslexiaReadingModePage({ onBack }) {
       if (!res.ok) throw new Error('Extraction failed');
       var data = await res.json();
       setFormattedHtml(data.formatted_html || '');
+      var nextPages = Array.isArray(data.formatted_pages) ? data.formatted_pages : [];
+      setFormattedPages(nextPages);
+      setCurrentPreviewPage(1);
       setTotalWords(data.total_words_count || 0);
       setReadTime(data.reading_time_minutes || 0);
     } catch (err) {
       setFormattedHtml('<div style="color: #ef4444; padding: 20px;">Failed: ' + err.message + '</div>');
+      setFormattedPages([]);
+      setCurrentPreviewPage(1);
     }
   }, [documentId, fontFamily, fontSize, lineHeight, letterSpacing, bgTint, enableRuler]);
+
+  useEffect(function () {
+    if (documentId) fetchContent();
+  }, [documentId, fetchContent]);
+
+  var handleDrop = useCallback(function (e) {
+    e.preventDefault();
+    var file = e.dataTransfer.files[0];
+    if (file && file.type === 'application/pdf') uploadPdf(file);
+  }, [uploadPdf]);
+
+  var handleDragOver = useCallback(function (e) { e.preventDefault(); }, []);
 
   useEffect(function () {
     if (documentId) fetchContent();
@@ -123,11 +142,15 @@ export default function DyslexiaReadingModePage({ onBack }) {
   var handleMouseMove = useCallback(function (e) {
     if (!enableRuler || !readerViewportRef.current) return;
     var rect = readerViewportRef.current.getBoundingClientRect();
-    var y = e.clientY - rect.top + readerViewportRef.current.scrollTop;
-    setRulerY(y - 25);
+    var y = e.clientY - rect.top;
+    setRulerY(y - 30);
   }, [enableRuler]);
 
   var handleMouseLeave = useCallback(function () { setRulerY(-100); }, []);
+
+  var activePreviewPage = formattedPages.length > 0
+    ? (formattedPages.find(function (page) { return page.page_number === currentPreviewPage; }) || formattedPages[0])
+    : null;
 
   var exportPdf = useCallback(async function () {
     if (!documentId) return;
@@ -180,9 +203,9 @@ export default function DyslexiaReadingModePage({ onBack }) {
                   </div>
       </div>
 
-      <div className="flex-1 flex flex-col lg:flex-row w-full max-w-[1920px] mx-auto mt-12 sm:mt-16 lg:mt-20 border border-slate-200 bg-white overflow-hidden rounded-xl shadow-[0_15px_50px_rgba(0,0,0,0.05)] relative z-10">
-        <div className="w-full lg:w-[340px] border-r border-slate-200 bg-slate-50 flex flex-col shrink-0 overflow-y-auto p-5 z-20">
-          <div className="flex flex-col gap-2">
+      <div className="flex-1 min-h-0 flex flex-col lg:flex-row w-full max-w-[1920px] mx-auto mt-12 sm:mt-16 lg:mt-20 border border-slate-200 bg-white overflow-hidden rounded-xl shadow-[0_15px_50px_rgba(0,0,0,0.05)] relative z-10">
+        <div className="w-full lg:w-[340px] border-r border-slate-200 bg-slate-50 flex flex-col shrink-0 overflow-y-auto p-5 z-20 gap-5">
+          <div className="flex flex-col gap-3">
             <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-file-text w-3.5 h-3.5"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg> 1. Open PDF Document
             </div>
@@ -200,14 +223,19 @@ export default function DyslexiaReadingModePage({ onBack }) {
             {fileStatus && <div className="text-xs font-semibold" style={{ color: fileStatus.indexOf('\u2713') >= 0 ? '#10b981' : '#ef4444' }}>{fileStatus}</div>}
           </div>
 
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-4">
             <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
               <span className="text-base">{'\u2699'}</span> 2. Reading Preferences
             </div>
 
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-bold text-slate-600">Dyslexia Font Family</label>
-              <select value={fontFamily} onChange={function (e) { setFontFamily(e.target.value); }} className="w-full px-3 py-2 rounded-lg border border-slate-300 text-[12px] font-semibold focus:outline-none focus:ring-2 focus:ring-teal-400">
+              <select
+                value={fontFamily}
+                onChange={function (e) { setFontFamily(e.target.value); }}
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-[12px] font-semibold focus:outline-none focus:ring-2 focus:ring-teal-400"
+                style={{ fontFamily: getFontCss() }}
+              >
                 {fonts.map(function (f) { return <option key={f.value} value={f.value}>{f.label}</option>; })}
               </select>
             </div>
@@ -255,7 +283,7 @@ export default function DyslexiaReadingModePage({ onBack }) {
             </div>
           </div>
 
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-3">
             <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
               <FileText className="w-3.5 h-3.5" /> 3. Export & Stats
             </div>
@@ -275,7 +303,7 @@ export default function DyslexiaReadingModePage({ onBack }) {
             )}
           </div>
 
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-3">
             <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
               <span className="text-base">{'\uD83D\uDCCA'}</span> User Workflow Progress
             </div>
@@ -299,24 +327,64 @@ export default function DyslexiaReadingModePage({ onBack }) {
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col overflow-hidden bg-white">
-          <div className="bg-slate-100 border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-white">
+          <div className="shrink-0 bg-slate-100 border-b border-slate-200 px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
               <Glasses className="w-4 h-4" /> Dyslexia Reader Canvas
             </div>
             <div className="text-[11px] text-slate-400 font-semibold">Move mouse over text to guide reading ruler</div>
           </div>
 
-          <div ref={readerViewportRef} onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave} className="flex-1 overflow-auto relative p-8" style={{ backgroundColor: bgTint }}>
+          <div ref={readerViewportRef} onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave} className="flex-1 min-h-0 overflow-hidden relative p-8 transition-colors duration-500" style={{ backgroundColor: bgTint }}>
             {enableRuler && rulerY > -100 && (
-              <div className="fixed left-0 right-0 h-[60px] pointer-events-none z-50 border-y-2" style={{ top: rulerY, backgroundColor: 'rgba(255,200,0,0.3)', borderColor: 'rgba(255,200,0,0.5)' }} />
+              <div className="absolute left-0 right-0 h-[60px] pointer-events-none z-50 border-y-2 shadow-[0_0_20px_rgba(255,200,0,0.15)] transition-all duration-75" style={{ top: rulerY, backgroundColor: 'rgba(255,200,0,0.3)', borderColor: 'rgba(255,200,0,0.6)' }} />
             )}
 
-            <div className="max-w-[720px] mx-auto rounded-xl border border-slate-200 shadow-xl p-12" style={{ backgroundColor: bgTint }}>
+            <div
+              className="max-w-[720px] h-full max-h-full mx-auto rounded-xl border border-slate-200 shadow-xl p-12 overflow-y-auto overflow-x-hidden"
+              style={{ backgroundColor: bgTint, fontFamily: getFontCss() }}
+            >
               {!formattedHtml ? (
                 <div className="text-center text-slate-500 text-sm py-12">
                   <FileText className="w-10 h-10 text-teal-400 mx-auto mb-3" />
                   Upload a PDF to render formatted dyslexia-friendly text with focus ruler guidance.
+                </div>
+              ) : formattedPages.length > 0 && activePreviewPage ? (
+                <div className="flex flex-col gap-6 h-full">
+                  <div className="sticky top-0 z-10 flex items-center justify-between rounded-lg border border-slate-200 bg-white/85 px-4 py-2 backdrop-blur-sm">
+                    <button
+                      onClick={function () { setCurrentPreviewPage(function (prev) { return Math.max(1, prev - 1); }); }}
+                      disabled={currentPreviewPage <= 1}
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700 disabled:opacity-40"
+                    >
+                      <ChevronLeft className="w-4 h-4" /> Prev
+                    </button>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Preview Page</span>
+                      <span className="rounded-full bg-slate-800 px-3 py-1 text-[11px] font-semibold text-white">
+                        Page {activePreviewPage.page_number} of {formattedPages.length}
+                      </span>
+                    </div>
+                    <button
+                      onClick={function () { setCurrentPreviewPage(function (prev) { return Math.min(formattedPages.length, prev + 1); }); }}
+                      disabled={currentPreviewPage >= formattedPages.length}
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700 disabled:opacity-40"
+                    >
+                      Next <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <section key={activePreviewPage.page_number} className="bg-transparent">
+                    <div
+                      dangerouslySetInnerHTML={{ __html: activePreviewPage.html }}
+                      style={{
+                        fontFamily: getFontCss(),
+                        fontSize: fontSize + 'px',
+                        lineHeight: lineHeight,
+                        letterSpacing: letterSpacing + 'em',
+                        color: '#1e293b',
+                      }}
+                    />
+                  </section>
                 </div>
               ) : (
                 <div dangerouslySetInnerHTML={{ __html: formattedHtml }} style={{

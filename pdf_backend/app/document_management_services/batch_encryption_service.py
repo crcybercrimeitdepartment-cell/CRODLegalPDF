@@ -225,6 +225,7 @@ class BatchEncryptionService:
                     "output_filename": out_name,
                     "original_size": len(file_bytes),
                     "encrypted_size": len(encrypted_bytes),
+                    "download_url": f"/document-management/batch-encryption/download-file/{session_id}/{out_name}"
                 })
 
             except Exception as exc:

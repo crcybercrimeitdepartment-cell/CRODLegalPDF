@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   UploadCloud, X, Download, Package, ArrowLeft, Camera, Image as ImageIcon,
   FileText, Plus, Trash2, CheckCircle2, AlertTriangle, XCircle, RefreshCw
@@ -50,16 +51,24 @@ const ScanDocuments = ({ tool, onBack }) => {
     setIsCameraOpen(true);
     setCapturedBlob(null);
     try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("Camera not supported or blocked by browser security (requires HTTPS/localhost).");
+      }
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } 
+        video: true
       });
       setCameraStream(stream);
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
     } catch (err) {
-      console.error(err);
-      alert("Camera access denied or unavailable.");
+      console.error("Camera error:", err);
+      let errMsg = "Unable to access the camera.";
+      if (err.name === 'NotAllowedError') errMsg = "Camera access was denied. Please allow camera permissions in your browser.";
+      else if (err.name === 'NotFoundError') errMsg = "No camera device was found on this computer.";
+      else errMsg = err.message || errMsg;
+      
+      alert(errMsg);
       closeCamera();
     }
   };
@@ -91,7 +100,8 @@ const ScanDocuments = ({ tool, onBack }) => {
 
   const usePhoto = () => {
     if (capturedBlob) {
-      const file = new File([capturedBlob], capturedBlob.name, { type: "image/jpeg" });
+      const fileName = capturedBlob.name || `capture_${Date.now()}.jpg`;
+      const file = new File([capturedBlob], fileName, { type: "image/jpeg" });
       addFiles([file]);
       closeCamera();
     }
@@ -105,10 +115,14 @@ const ScanDocuments = ({ tool, onBack }) => {
   }, [cameraStream]);
 
 
-  // --- 3. PROCESSING QUEUE (SIMULATED) ---
+  const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
+  // --- 3. PROCESSING QUEUE ---
   const processQueue = useCallback(async () => {
     const waitingIndex = pages.findIndex(p => p.status === 'waiting');
     if (waitingIndex === -1) return; // Nothing to process
+
+    const pageToProcess = pages[waitingIndex];
 
     // Mark as processing
     setPages(prev => {
@@ -118,34 +132,51 @@ const ScanDocuments = ({ tool, onBack }) => {
     });
 
     try {
-      // Simulate backend deskew/enhance time
-      await new Promise(r => setTimeout(r, 2000));
+      const formData = new FormData();
+      formData.append("file", pageToProcess.file);
+
+      const res = await fetch(`${API_BASE_URL}/api/v1/scan/process`, {
+        method: "POST",
+        body: formData
+      });
+      const data = await res.json();
       
-      // Simulate success
+      if (!res.ok) throw new Error(data.detail || "Processing failed");
+      
       setPages(prev => {
         const p = [...prev];
         if (p[waitingIndex]) {
-          p[waitingIndex].status = 'success';
+          p[waitingIndex].status = data.is_detected === false ? 'warning' : 'success';
+          p[waitingIndex].job_id = data.job_id;
           p[waitingIndex].resultData = {
-            // Simulated processed image url (using placeholder for now, usually it'd be a generated blob)
-            previewUrl: p[waitingIndex].originalUrl // Just use original url for mock, but apply CSS filter to simulate enhancement
+            previewUrl: `${API_BASE_URL}${data.preview_url}`
           };
         }
         return p;
       });
       
     } catch(err) {
-       setPages(prev => {
+      console.error(err);
+      setPages(prev => {
         const p = [...prev];
         if (p[waitingIndex]) p[waitingIndex].status = 'error';
         return p;
       });
     }
-  }, [pages]);
+  }, [pages, API_BASE_URL]);
 
   useEffect(() => {
     processQueue();
   }, [pages, processQueue]);
+
+  useEffect(() => {
+    if (isCameraOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => document.body.style.overflow = '';
+  }, [isCameraOpen]);
 
 
   // --- 4. GALLERY ACTIONS ---
@@ -154,7 +185,6 @@ const ScanDocuments = ({ tool, onBack }) => {
       const p = prev.find(x => x.id === id);
       if (p) {
          URL.revokeObjectURL(p.originalUrl);
-         // if processed blob, revoke too
       }
       return prev.filter(x => x.id !== id);
     });
@@ -167,46 +197,70 @@ const ScanDocuments = ({ tool, onBack }) => {
     }));
   };
 
+  const downloadFile = (url, name) => {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   // --- 5. DOWNLOADS ---
-  const allDone = pages.length > 0 && pages.every(p => p.status === 'success' || p.status === 'error' || p.status === 'warning');
-  const hasSuccess = pages.some(p => p.status === 'success' || p.status === 'warning');
+  const canDownload = (pages) => {
+    if (pages.length === 0) return false;
+    const allDone = pages.every(p => p.status === 'success' || p.status === 'error' || p.status === 'warning');
+    const hasSuccess = pages.some(p => p.status === 'success' || p.status === 'warning');
+    return allDone && hasSuccess;
+  };
 
   const downloadPdf = async () => {
-    alert("Simulating PDF generation for " + pages.filter(p => p.status === 'success').length + " pages...");
+    const completedPages = pages.filter(p => (p.status === 'success' || p.status === 'warning') && p.job_id);
+    if (completedPages.length === 0) return;
+    
+    try {
+      const jobIds = completedPages.map(p => p.job_id);
+      const res = await fetch(`${API_BASE_URL}/api/v1/scan/generate-pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_ids: jobIds })
+      });
+      const data = await res.json();
+      
+      if (!res.ok) throw new Error(data.detail || "PDF generation failed");
+      
+      downloadFile(`${API_BASE_URL}${data.download_url}`, "scanned_document.pdf");
+    } catch (error) {
+      console.error(error);
+      alert("Failed to generate PDF file.");
+    }
   };
 
   const downloadZip = async () => {
-    alert("Simulating ZIP generation...");
+    const completedPages = pages.filter(p => (p.status === 'success' || p.status === 'warning') && p.job_id);
+    if (completedPages.length === 0) return;
+    
+    try {
+      const jobIds = completedPages.map(p => p.job_id);
+      const res = await fetch(`${API_BASE_URL}/api/v1/scan/generate-zip`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_ids: jobIds })
+      });
+      const data = await res.json();
+      
+      if (!res.ok) throw new Error(data.detail || "ZIP generation failed");
+      
+      downloadFile(`${API_BASE_URL}${data.download_url}`, "scanned_documents.zip");
+    } catch (error) {
+      console.error(error);
+      alert("Failed to generate ZIP file.");
+    }
   };
-
 
   return (
     <div className="flex-1 flex flex-col w-full min-h-0 relative bg-transparent overflow-hidden px-4 sm:px-12 md:px-20 lg:px-28 xl:px-36 pb-4 sm:pb-8">
       
-      
-
-      {/* Top Actions */}
-      <div className="absolute top-1.5 right-3 sm:top-5 sm:right-6 md:right-10 z-40 flex gap-2">
-         {pages.length > 0 && (
-           <>
-            <button 
-              onClick={downloadPdf}
-              disabled={!canDownload(pages)}
-              className="px-3 sm:px-4 py-1.5 sm:py-2 bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2 shadow-md shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <FileText className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Save as PDF</span>
-            </button>
-            <button 
-              onClick={downloadZip}
-              disabled={!canDownload(pages)}
-              className="px-3 sm:px-4 py-1.5 sm:py-2 bg-slate-600 hover:bg-slate-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Package className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Download All (ZIP)</span>
-            </button>
-           </>
-         )}
-      </div>
-
       <div className="flex-1 w-full max-w-[1536px] mx-auto border border-slate-200 bg-white overflow-hidden rounded-xl shadow-[0_15px_50px_rgba(0,0,0,0.05)] relative flex flex-col">
         
         {/* Workspace Area */}
@@ -241,9 +295,10 @@ const ScanDocuments = ({ tool, onBack }) => {
           ) : (
             /* Gallery State */
             <div className="flex flex-col">
-              <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-200">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 pb-4 border-b border-slate-200 gap-4">
                 <h3 className="text-xl font-bold text-slate-800">Scanned Pages ({pages.length})</h3>
-                <div className="flex gap-3">
+                
+                <div className="flex flex-wrap items-center gap-3">
                   <button onClick={openCamera} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-bold rounded-lg flex items-center gap-2 transition-colors">
                     <Camera className="w-4 h-4" /> Camera
                   </button>
@@ -251,6 +306,23 @@ const ScanDocuments = ({ tool, onBack }) => {
                     <Plus className="w-4 h-4" /> Add More
                   </button>
                   <input type="file" ref={fileInputRef} onChange={handleUpload} multiple accept="image/jpeg,image/png,image/webp" className="hidden" />
+
+                  <div className="w-px h-6 bg-slate-200 mx-1 hidden sm:block"></div>
+
+                  <button 
+                    onClick={downloadPdf}
+                    disabled={!canDownload(pages)}
+                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <FileText className="w-4 h-4" /> Save as PDF
+                  </button>
+                  <button 
+                    onClick={downloadZip}
+                    disabled={!canDownload(pages)}
+                    className="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Package className="w-4 h-4" /> Download All (ZIP)
+                  </button>
                 </div>
               </div>
               
@@ -307,9 +379,9 @@ const ScanDocuments = ({ tool, onBack }) => {
       </div>
 
       {/* Camera Modal */}
-      {isCameraOpen && (
-        <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-md z-[100] flex flex-col items-center justify-center p-4">
-          <div className="bg-[#1e293b] border border-slate-700 rounded-2xl p-5 w-full max-w-4xl shadow-2xl flex flex-col gap-4">
+      {isCameraOpen && createPortal(
+        <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-md z-[9999] flex flex-col items-center p-4 sm:p-8 overflow-y-auto">
+          <div className="bg-[#1e293b] border border-slate-700 rounded-2xl p-4 sm:p-5 w-full max-w-4xl shadow-2xl flex flex-col gap-4 my-auto shrink-0">
             
             <div className="flex justify-between items-center border-b border-slate-700 pb-3">
               <h3 className="text-lg font-bold text-white flex items-center gap-2"><Camera className="w-5 h-5" /> Document Scanner</h3>
@@ -325,25 +397,34 @@ const ScanDocuments = ({ tool, onBack }) => {
               <canvas ref={canvasRef} className="hidden" />
             </div>
             
-            <div className="flex justify-center pt-2">
+            <div className="flex flex-wrap justify-center gap-3 pt-2">
               {!capturedBlob ? (
-                <button onClick={capturePhoto} className="px-8 py-3 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl transition-colors shadow-lg flex items-center gap-2">
-                  <Camera className="w-5 h-5" /> Capture
-                </button>
+                <>
+                  <button onClick={capturePhoto} className="px-6 sm:px-8 py-3 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl transition-colors shadow-lg flex items-center gap-2">
+                    <Camera className="w-5 h-5" /> Capture
+                  </button>
+                  <button onClick={closeCamera} className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-xl transition-colors flex items-center gap-2">
+                    Done
+                  </button>
+                </>
               ) : (
-                <div className="flex gap-4">
-                  <button onClick={() => setCapturedBlob(null)} className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-xl transition-colors flex items-center gap-2">
+                <>
+                  <button onClick={() => setCapturedBlob(null)} className="px-5 sm:px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-xl transition-colors flex items-center gap-2">
                     <RefreshCw className="w-4 h-4" /> Retake
                   </button>
-                  <button onClick={usePhoto} className="px-6 py-3 bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-xl transition-colors shadow-lg flex items-center gap-2">
+                  <button onClick={usePhoto} className="px-5 sm:px-6 py-3 bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-xl transition-colors shadow-lg flex items-center gap-2">
                     <CheckCircle2 className="w-5 h-5" /> Use Photo
                   </button>
-                </div>
+                  <button onClick={closeCamera} className="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition-colors flex items-center gap-2">
+                    Close
+                  </button>
+                </>
               )}
             </div>
 
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>

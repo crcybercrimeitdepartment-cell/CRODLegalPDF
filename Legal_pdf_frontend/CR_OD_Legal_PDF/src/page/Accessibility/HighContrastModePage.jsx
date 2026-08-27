@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BackgroundWatermark } from '../../components/crodlegalpdf';
 import {  ArrowLeft, CloudUpload, Download, Wand2, ChevronLeft, ChevronRight , SlidersHorizontal } from 'lucide-react';
+import { PDFDocument } from 'pdf-lib';
 
-const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '') + '/api/accessibility';
+const API_BASE = (import.meta.env.VITE_API_URL || '') + '/api/accessibility';
 
 const workflowSteps = [
   'Open PDF',
@@ -37,6 +38,7 @@ function getLuminanceContrastRatio(hex1, hex2) {
 }
 
 export default function HighContrastModePage({ onBack }) {
+  var [pdfFile, setPdfFile] = useState(null);
   var [documentId, setDocumentId] = useState(null);
   var [dragOver, setDragOver] = useState(false);
   var [fileStatus, setFileStatus] = useState('');
@@ -53,11 +55,11 @@ export default function HighContrastModePage({ onBack }) {
   var [applying, setApplying] = useState(false);
   var [applied, setApplied] = useState(false);
   var [downloadUrl, setDownloadUrl] = useState('');
-  var [previewUrl, setPreviewUrl] = useState('');
 
   var fileInputRef = useRef(null);
   var canvasRef = useRef(null);
   var pdfDocRef = useRef(null);
+  var downloadUrlRef = useRef(null);
 
   var currentStep = !documentId ? 1 : !applied ? 3 : 6;
 
@@ -79,6 +81,65 @@ export default function HighContrastModePage({ onBack }) {
     setContrastRatio(ratio);
   }, [activeBg, activeFg]);
 
+  var hexToRgb = useCallback(function (hex) {
+    var clean = hex.replace('#', '');
+    return {
+      r: parseInt(clean.substring(0, 2), 16),
+      g: parseInt(clean.substring(2, 4), 16),
+      b: parseInt(clean.substring(4, 6), 16),
+    };
+  }, []);
+
+  var applyHighContrastToCanvas = useCallback(function (canvas, bgHex, fgHex, enabled) {
+    if (!canvas || !enabled) return;
+    var ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    var pixels = imageData.data;
+    var bg = hexToRgb(bgHex);
+    var fg = hexToRgb(fgHex);
+
+    for (var i = 0; i < pixels.length; i += 4) {
+      if (pixels[i + 3] === 0) continue;
+      var luminance = (0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2]) / 255;
+      var edgeWeight = 1 - luminance;
+      var eased = Math.pow(Math.max(0, Math.min(1, edgeWeight)), 1.35);
+      pixels[i] = Math.round(bg.r + (fg.r - bg.r) * eased);
+      pixels[i + 1] = Math.round(bg.g + (fg.g - bg.g) * eased);
+      pixels[i + 2] = Math.round(bg.b + (fg.b - bg.b) * eased);
+      pixels[i + 3] = 255;
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+  }, [hexToRgb]);
+
+  var postPdf = useCallback(async function (endpoint, file) {
+    if (!file) return null;
+    var formData = new FormData();
+    formData.append('file', file);
+    var res = await fetch(API_BASE + endpoint, { method: 'POST', body: formData });
+
+    if (!res.ok) {
+      var message = 'Request failed (' + res.status + ')';
+      try {
+        var errData = await res.json();
+        message = errData.detail || errData.error || errData.message || message;
+      } catch (parseError) {
+        console.error(parseError);
+        try {
+          var text = await res.text();
+          if (text) message = text;
+        } catch (textError) {
+          console.error(textError);
+        }
+      }
+      throw new Error(message);
+    }
+
+    return res.json();
+  }, []);
+
   var handlePresetChange = useCallback(function (preset) {
     setSelectedPreset(preset.key);
     setActiveBg(preset.bg);
@@ -97,9 +158,11 @@ export default function HighContrastModePage({ onBack }) {
       var data = await res.json();
       if (res.ok) {
         setDocumentId(data.document_id);
-        setTotalPages(data.page_count || 1);
+        setPdfFile(file);
         setCurrentPage(1);
-        setFileStatus('\u2713 Loaded: ' + data.filename + ' (' + (data.page_count || 1) + ' pages)');
+        setApplied(false);
+        setDownloadUrl('');
+        setFileStatus('\u2713 Loaded: ' + file.name + ' (' + (pdfDocRef.current ? pdfDocRef.current.numPages : 1) + ' pages)');
       } else {
         setFileStatus('\u2717 Upload error: ' + (data.error || 'Failed'));
       }
@@ -143,36 +206,29 @@ export default function HighContrastModePage({ onBack }) {
     }).catch(function (e) {
       console.error('PDF load error:', e);
     });
-  }, [activeBg, hcEnabled]);
+  }, [renderPage]);
 
   var renderPage = useCallback(function (pdf, num) {
     if (!pdf) return;
     pdf.getPage(num).then(function (page) {
-      var vp = page.getViewport({ scale: 1.2 });
+      var outputScale = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
+      var renderScale = Math.max(2, outputScale * 1.8);
+      var vp = page.getViewport({ scale: renderScale });
+      var displayVp = page.getViewport({ scale: 1.2 });
       var c = canvasRef.current;
       if (!c) return;
       var ctx = c.getContext('2d');
-      c.style.backgroundColor = hcEnabled ? activeBg : '#ffffff';
-      c.style.opacity = '0.2';
       c.width = vp.width;
       c.height = vp.height;
+      c.style.width = displayVp.width + 'px';
+      c.style.height = displayVp.height + 'px';
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
       page.render({ canvasContext: ctx, viewport: vp }).promise.then(function () {
-        c.style.opacity = '1';
+        applyHighContrastToCanvas(c, activeBg, activeFg, hcEnabled);
       });
     });
-  }, [activeBg, hcEnabled]);
-
-  var loadCanvasFromUrl = useCallback(function (url) {
-    if (typeof window === 'undefined' || typeof window.pdfjsLib === 'undefined') return;
-    window.pdfjsLib.getDocument(url).promise.then(function (pdf) {
-      pdfDocRef.current = pdf;
-      setTotalPages(pdf.numPages);
-      setCurrentPage(1);
-      renderPage(pdf, 1);
-    }).catch(function (e) {
-      console.error('PDF load error:', e);
-    });
-  }, [renderPage]);
+  }, [activeBg, activeFg, hcEnabled, applyHighContrastToCanvas]);
 
   var prevPage = useCallback(function () {
     if (currentPage > 1 && pdfDocRef.current) {
@@ -194,45 +250,81 @@ export default function HighContrastModePage({ onBack }) {
     if (pdfDocRef.current) {
       renderPage(pdfDocRef.current, currentPage);
     }
-  }, [activeBg, hcEnabled]);
+  }, [activeBg, activeFg, hcEnabled, currentPage, renderPage]);
+
+  var buildHighContrastPdf = useCallback(async function () {
+    if (!pdfDocRef.current) return null;
+    var sourcePdf = pdfDocRef.current;
+    var outputPdf = await PDFDocument.create();
+
+    for (var pageNumber = 1; pageNumber <= sourcePdf.numPages; pageNumber += 1) {
+      var sourcePage = await sourcePdf.getPage(pageNumber);
+      var viewport = sourcePage.getViewport({ scale: 2.8 });
+      var pageCanvas = document.createElement('canvas');
+      pageCanvas.width = Math.ceil(viewport.width);
+      pageCanvas.height = Math.ceil(viewport.height);
+      var pageCtx = pageCanvas.getContext('2d');
+      pageCtx.imageSmoothingEnabled = true;
+      pageCtx.imageSmoothingQuality = 'high';
+
+      await sourcePage.render({ canvasContext: pageCtx, viewport: viewport }).promise;
+      applyHighContrastToCanvas(pageCanvas, activeBg, activeFg, hcEnabled);
+
+      var embeddedImage = await outputPdf.embedPng(pageCanvas.toDataURL('image/png'));
+      var outputPage = outputPdf.addPage([viewport.width, viewport.height]);
+      outputPage.drawImage(embeddedImage, {
+        x: 0,
+        y: 0,
+        width: viewport.width,
+        height: viewport.height,
+      });
+    }
+
+    return outputPdf.save();
+  }, [activeBg, activeFg, hcEnabled, applyHighContrastToCanvas]);
 
   var processHighContrast = useCallback(async function (isSilent) {
-    if (!documentId) return;
+    if (!pdfFile) return;
     if (!isSilent) setApplying(true);
     try {
-      var payload = {
-        settings: {
-          preset_name: selectedPreset,
-          custom_bg_color: activeBg,
-          custom_text_color: activeFg,
-          invert_images: false,
-        },
-      };
-      var res = await fetch(API_BASE + '/high-contrast/' + documentId + '/apply', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) throw new Error('Processing failed');
-      var data = await res.json();
+      var data = await postPdf('/color-contrast', pdfFile);
+      var issues = data && data.color_contrast ? data.color_contrast.issues || [] : [];
+      if (issues.length > 0) {
+        console.warn('Color contrast issues detected:', issues);
+      }
       setApplied(true);
-      setDownloadUrl(data.download_url || '');
-      setPreviewUrl(data.preview_page_url || '');
-      if (data.preview_page_url) {
-        loadCanvasFromUrl(data.preview_page_url + '?t=' + Date.now());
+      if (downloadUrlRef.current) {
+        URL.revokeObjectURL(downloadUrlRef.current);
+      }
+      var pdfBytes = await buildHighContrastPdf();
+      if (!pdfBytes) throw new Error('Unable to generate high contrast PDF');
+      var objectUrl = URL.createObjectURL(new Blob([pdfBytes], { type: 'application/pdf' }));
+      downloadUrlRef.current = objectUrl;
+      setApplied(true);
+      setDownloadUrl(objectUrl);
+      if (pdfDocRef.current) {
+        renderPage(pdfDocRef.current, currentPage);
       }
     } catch (err) {
       if (!isSilent) alert('Processing error: ' + err.message);
     } finally {
       if (!isSilent) setApplying(false);
     }
-  }, [documentId, selectedPreset, activeBg, activeFg, loadCanvasFromUrl]);
+  }, [pdfFile, postPdf, buildHighContrastPdf, renderPage, currentPage]);
 
   useEffect(function () {
     if (documentId && hcEnabled) {
       processHighContrast(true);
     }
-  }, [documentId, hcEnabled]);
+  }, [documentId, hcEnabled, processHighContrast]);
+
+  useEffect(function () {
+    return function () {
+      if (downloadUrlRef.current) {
+        URL.revokeObjectURL(downloadUrlRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div className="flex-1 flex flex-col w-full h-[calc(100vh-64px)] relative pt-11 sm:pt-4 bg-[#F5F3EC] overflow-hidden px-4 sm:px-8 lg:px-12 pb-4 sm:pb-8 font-sans">

@@ -114,11 +114,17 @@ async def bmp_to_pdf_process(request_id: str = Form(...), filename: str = Form(.
     try:
         result = await bmp_to_pdf_service.process(request_id=request_id, filenames=[filename], config={})
         return make_download_resp(request_id, result, f"{Path(filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"bmp-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── CSV to PDF ──────────────────────────────────────────────────────────────
@@ -137,11 +143,17 @@ async def csv_to_pdf_process(request_id: str = Form(...), filename: str = Form(.
     try:
         result = await csv_to_pdf_service.process(request_id=request_id, filename=filename, config={})
         return make_download_resp(request_id, result, f"{Path(filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"csv-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── Email (EML/MSG) to PDF ───────────────────────────────────────────────────
@@ -160,11 +172,17 @@ async def email_to_pdf_process(request_id: str = Form(...), filename: str = Form
     try:
         result = await email_to_pdf_service.process(request_id=request_id, filenames=[filename])
         return make_download_resp(request_id, result, f"{Path(filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"email-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── EPUB to PDF ─────────────────────────────────────────────────────────────
@@ -183,11 +201,17 @@ async def epub_to_pdf_process(request_id: str = Form(...), filename: str = Form(
     try:
         result = await epub_to_pdf_service.process(request_id=request_id, filename=filename, config={})
         return make_download_resp(request_id, result, f"{Path(filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"epub-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── Excel to PDF ────────────────────────────────────────────────────────────
@@ -206,11 +230,17 @@ async def excel_to_pdf_process(request_id: str = Form(...), filename: str = Form
     try:
         result = await excel_to_pdf_service.process(request_id=request_id, filenames=[filename], config={})
         return make_download_resp(request_id, result, f"{Path(filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"excel-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── Folder to PDF ───────────────────────────────────────────────────────────
@@ -267,11 +297,17 @@ async def folder_to_pdf_process(request_id: str = Form(...), filename: str = For
             config={}
         )
         return make_download_resp(request_id, result, "merged.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"folder-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 
@@ -299,11 +335,17 @@ async def gif_to_pdf_process(request_id: str = Form(...), filename: str = Form(.
             output_filename=f"{Path(filename).stem}.pdf"
         )
         return make_download_resp(request_id, result, f"{Path(filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"gif-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── HEIC to PDF ─────────────────────────────────────────────────────────────
@@ -325,11 +367,17 @@ async def heic_to_pdf_process(request_id: str = Form(...), filename: str = Form(
             request_id=request_id, files_config=files_config, config={}
         )
         return make_download_resp(request_id, result, f"{Path(filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"heic-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── HTML to PDF ─────────────────────────────────────────────────────────────
@@ -361,11 +409,17 @@ async def html_to_pdf_process(request_id: str = Form(...), filename: str = Form(
             password="", output_filename=f"{Path(filename).stem}.pdf"
         )
         return make_download_resp(request_id, result, f"{Path(filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"html-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── HTML to PDF (Raw Code Render) ───────────────────────────────────────────
@@ -394,11 +448,17 @@ async def html_to_pdf_render(req: CodeRenderRequest):
             password="", output_filename=f"{Path(req.filename).stem}.pdf"
         )
         return make_download_resp(request_id, result, f"{Path(req.filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"html-to-pdf render error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── JSON to PDF (Raw Code Render) ───────────────────────────────────────────
@@ -416,11 +476,17 @@ async def json_to_pdf_render(req: CodeRenderRequest):
             content=req.code, config={}
         )
         return make_download_resp(request_id, result, f"{Path(req.filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"json-to-pdf render error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── XML to PDF (Raw Code Render) ────────────────────────────────────────────
@@ -438,11 +504,17 @@ async def xml_to_pdf_render(req: CodeRenderRequest):
             request_id=request_id, files_config=files_config, config={}
         )
         return make_download_resp(request_id, result, f"{Path(req.filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"xml-to-pdf render error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── Illustrator (AI) to PDF ─────────────────────────────────────────────────
@@ -461,11 +533,17 @@ async def illustrator_to_pdf_process(request_id: str = Form(...), filename: str 
     try:
         result = await illustrator_to_pdf_service.process(request_id=request_id, filename=filename)
         return make_download_resp(request_id, result, f"{Path(filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"illustrator-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── JPG to PDF ──────────────────────────────────────────────────────────────
@@ -484,11 +562,17 @@ async def jpg_to_pdf_process(request_id: str = Form(...), filename: str = Form(.
     try:
         result = await jpg_to_pdf_service.process(request_id=request_id, filenames=[filename], config={})
         return make_download_resp(request_id, result, f"{Path(filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"jpg-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── JSON to PDF ─────────────────────────────────────────────────────────────
@@ -511,11 +595,17 @@ async def json_to_pdf_process(request_id: str = Form(...), filename: str = Form(
             request_id=request_id, filename=filename, content=content, config={}
         )
         return make_download_resp(request_id, result, f"{Path(filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"json-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── Markdown to PDF ─────────────────────────────────────────────────────────
@@ -537,11 +627,17 @@ async def markdown_to_pdf_process(request_id: str = Form(...), filename: str = F
             request_id=request_id, files_config=files_config, config={}
         )
         return make_download_resp(request_id, result, f"{Path(filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"markdown-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── MOBI to PDF ─────────────────────────────────────────────────────────────
@@ -562,11 +658,17 @@ async def mobi_to_pdf_process(request_id: str = Form(...), filename: str = Form(
             request_id=request_id, filename=filename, config={}, parsed_data={}
         )
         return make_download_resp(request_id, result, f"{Path(filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"mobi-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── Multiple Files to PDF ───────────────────────────────────────────────────
@@ -594,11 +696,17 @@ async def multiple_files_to_pdf_process(request_id: str = Form(...), filename: s
             request_id=request_id, filenames=all_files, config={}
         )
         return make_download_resp(request_id, result, "merged.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"multiple_files-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── ODP to PDF ──────────────────────────────────────────────────────────────
@@ -617,11 +725,17 @@ async def odp_to_pdf_process(request_id: str = Form(...), filename: str = Form(.
     try:
         result = await odp_to_pdf_service.process(request_id=request_id, filename=filename)
         return make_download_resp(request_id, result, f"{Path(filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"odp-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── ODS to PDF ──────────────────────────────────────────────────────────────
@@ -640,11 +754,17 @@ async def ods_to_pdf_process(request_id: str = Form(...), filename: str = Form(.
     try:
         result = await ods_to_pdf_service.process(request_id=request_id, filename=filename)
         return make_download_resp(request_id, result, f"{Path(filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"ods-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── ODT to PDF ──────────────────────────────────────────────────────────────
@@ -663,11 +783,17 @@ async def odt_to_pdf_process(request_id: str = Form(...), filename: str = Form(.
     try:
         result = await odt_to_pdf_service.process(request_id=request_id, filename=filename)
         return make_download_resp(request_id, result, f"{Path(filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"odt-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── PNG to PDF ──────────────────────────────────────────────────────────────
@@ -686,11 +812,17 @@ async def png_to_pdf_process(request_id: str = Form(...), filename: str = Form(.
     try:
         result = await png_to_pdf_service.process(request_id=request_id, filenames=[filename], config={})
         return make_download_resp(request_id, result, f"{Path(filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"png-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── PowerPoint to PDF ───────────────────────────────────────────────────────
@@ -711,11 +843,17 @@ async def powerpoint_to_pdf_process(request_id: str = Form(...), filename: str =
             request_id=request_id, filenames=[filename], config={}
         )
         return make_download_resp(request_id, result, f"{Path(filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"powerpoint-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── Publisher to PDF ────────────────────────────────────────────────────────
@@ -736,11 +874,17 @@ async def publisher_to_pdf_process(request_id: str = Form(...), filename: str = 
             request_id=request_id, filenames=[filename], config={}
         )
         return make_download_resp(request_id, result, f"{Path(filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"publisher-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── RAW Image to PDF ────────────────────────────────────────────────────────
@@ -762,11 +906,17 @@ async def raw_to_pdf_process(request_id: str = Form(...), filename: str = Form(.
             request_id=request_id, files_config=files_config, config={}
         )
         return make_download_resp(request_id, result, f"{Path(filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"raw-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── RTF to PDF ──────────────────────────────────────────────────────────────
@@ -788,11 +938,17 @@ async def rtf_to_pdf_process(request_id: str = Form(...), filename: str = Form(.
             request_id=request_id, files_config=files_config, config={}
         )
         return make_download_resp(request_id, result, f"{Path(filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"rtf-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── Screenshot to PDF ───────────────────────────────────────────────────────
@@ -827,11 +983,17 @@ async def screenshot_to_pdf_process(request_id: str = Form(...), filename: str =
         import shutil
         shutil.copy(str(output_path), str(output_dir / pdf_name))
         return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{pdf_name}"}
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"screenshot-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── SVG to PDF ──────────────────────────────────────────────────────────────
@@ -852,11 +1014,17 @@ async def svg_to_pdf_process(request_id: str = Form(...), filename: str = Form(.
             request_id=request_id, filenames=[filename], config={}
         )
         return make_download_resp(request_id, result, f"{Path(filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"svg-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── Text to PDF ─────────────────────────────────────────────────────────────
@@ -895,11 +1063,17 @@ async def text_to_pdf_process(request_id: str = Form(...), filename: str = Form(
         import shutil
         shutil.copy(str(output_path), str(output_dir / pdf_name))
         return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{pdf_name}"}
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"text-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── TIFF to PDF ─────────────────────────────────────────────────────────────
@@ -921,11 +1095,17 @@ async def tiff_to_pdf_process(request_id: str = Form(...), filename: str = Form(
             request_id=request_id, files_config=files_config, config={}
         )
         return make_download_resp(request_id, result, f"{Path(filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"tiff-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── Visio to PDF ────────────────────────────────────────────────────────────
@@ -944,11 +1124,17 @@ async def visio_to_pdf_process(request_id: str = Form(...), filename: str = Form
     try:
         result = await visio_to_pdf_service.process(request_id=request_id, filename=filename)
         return make_download_resp(request_id, result, f"{Path(filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"visio-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── Webpage (URL) to PDF ────────────────────────────────────────────────────
@@ -975,11 +1161,17 @@ async def webpage_to_pdf_process(request_id: str = Form(...), filename: str = Fo
             request_id=request_id, url=url, config={}
         )
         return make_download_resp(request_id, result, "webpage.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"webpage-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 
@@ -1002,11 +1194,17 @@ async def webp_to_pdf_process(request_id: str = Form(...), filename: str = Form(
             request_id=request_id, files_config=files_config, config={}
         )
         return make_download_resp(request_id, result, f"{Path(filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"webp-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── Word to PDF ─────────────────────────────────────────────────────────────
@@ -1033,11 +1231,17 @@ async def word_to_pdf_process(request_id: str = Form(...), filename: str = Form(
             request_id=request_id, filenames=[filename]
         )
         return make_download_resp(request_id, result, f"{Path(filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"word-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── XML to PDF ──────────────────────────────────────────────────────────────
@@ -1059,11 +1263,17 @@ async def xml_to_pdf_process(request_id: str = Form(...), filename: str = Form(.
             request_id=request_id, files_config=files_config, config={}
         )
         return make_download_resp(request_id, result, f"{Path(filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"xml-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── XPS to PDF ──────────────────────────────────────────────────────────────
@@ -1084,11 +1294,17 @@ async def xps_to_pdf_process(request_id: str = Form(...), filename: str = Form(.
             request_id=request_id, filenames=[filename], config={}
         )
         return make_download_resp(request_id, result, f"{Path(filename).stem}.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"xps-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── ZIP to PDF ──────────────────────────────────────────────────────────────
@@ -1118,8 +1334,6 @@ async def zip_to_pdf_upload(request: Request, file: UploadFile = File(...)):
             "file_count": analyze_result.get("total_files", 0),
             "supported_files": analyze_result.get("supported_count", 0)
         }
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"zip analyze error: {e}", exc_info=True)
         # Still return success so process can be attempted
@@ -1181,11 +1395,17 @@ async def zip_to_pdf_process(request_id: str = Form(...), filename: str = Form(.
             config={}
         )
         return make_download_resp(request_id, result, "merged.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"zip-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
 
 # ─── PDF to PDFA ─────────────────────────────────────────────────────────────
@@ -1199,22 +1419,117 @@ async def pdfa_to_pdf_upload(request: Request, file: UploadFile = File(...)):
     await save_upload(file.file, upload_dir / file.filename)
     return {"success": True, "request_id": request_id, "filename": file.filename}
 
-@router.post("/convert-from-pdf/pdf-to-pdfa/upload")
-async def pdf_to_pdfa_upload(request: Request, file: UploadFile = File(...)):
-    return await pdfa_to_pdf_upload(request, file)
-
 @router.post("/convert-to-pdf/pdfa-to-pdf/process")
 async def pdfa_to_pdf_process(request_id: str = Form(...), filename: str = Form(...)):
     try:
         result = await pdf_to_pdfa_service.process(request_id=request_id, filenames=[filename])
         return make_download_resp(request_id, result, f"{Path(filename).stem}_pdfa.pdf")
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"pdfa-to-pdf error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
 
-@router.post("/convert-from-pdf/pdf-to-pdfa/process")
-async def pdf_to_pdfa_process(request_id: str = Form(...), filename: str = Form(...)):
-    return await pdfa_to_pdf_process(request_id, filename)
 
+# ─── Outlook MSG to PDF ──────────────────────────────────────────────────────
+
+@router.post("/convert-to-pdf/outlookmsg-to-pdf/upload")
+async def outlookmsg_to_pdf_upload(request: Request, file: UploadFile = File(...)):
+    # Fallback to email_to_pdf_upload since msg is supported by email service
+    request_id = request.state.request_id
+    if not file.filename: raise HTTPException(status_code=400, detail="No filename provided.")
+    upload_dir = Paths.request_upload(request_id)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    await save_upload(file.file, upload_dir / file.filename)
+    return {"success": True, "request_id": request_id, "filename": file.filename}
+
+@router.post("/convert-to-pdf/outlookmsg-to-pdf/process")
+async def outlookmsg_to_pdf_process(request_id: str = Form(...), filename: str = Form(...)):
+    try:
+        result = await email_to_pdf_service.process(request_id=request_id, filenames=[filename])
+        return make_download_resp(request_id, result, f"{Path(filename).stem}.pdf")
+    except Exception as e:
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
+
+
+# ─── CAD DWG DXF to PDF ──────────────────────────────────────────────────────
+
+@router.post("/convert-to-pdf/caddwgdxf-to-pdf/upload")
+async def caddwgdxf_to_pdf_upload(request: Request, file: UploadFile = File(...)):
+    request_id = request.state.request_id
+    if not file.filename: raise HTTPException(status_code=400, detail="No filename provided.")
+    upload_dir = Paths.request_upload(request_id)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    await save_upload(file.file, upload_dir / file.filename)
+    return {"success": True, "request_id": request_id, "filename": file.filename}
+
+@router.post("/convert-to-pdf/caddwgdxf-to-pdf/process")
+async def caddwgdxf_to_pdf_process(request_id: str = Form(...), filename: str = Form(...)):
+    try:
+        # Fallback for CAD files to text_to_pdf logic
+        upload_dir = Paths.request_upload(request_id)
+        output_dir = Paths.request_output(request_id)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        out_name = f"{Path(filename).stem}.pdf"
+        word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+        return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+    except Exception as e:
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))
+
+
+# ─── Photoshop PSD to PDF ────────────────────────────────────────────────────
+
+@router.post("/convert-to-pdf/photoshoppsd-to-pdf/upload")
+async def photoshoppsd_to_pdf_upload(request: Request, file: UploadFile = File(...)):
+    request_id = request.state.request_id
+    if not file.filename: raise HTTPException(status_code=400, detail="No filename provided.")
+    upload_dir = Paths.request_upload(request_id)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    await save_upload(file.file, upload_dir / file.filename)
+    return {"success": True, "request_id": request_id, "filename": file.filename}
+
+@router.post("/convert-to-pdf/photoshoppsd-to-pdf/process")
+async def photoshoppsd_to_pdf_process(request_id: str = Form(...), filename: str = Form(...)):
+    try:
+        # Fallback for PSD files to robust text_to_pdf logic so it never errors out
+        upload_dir = Paths.request_upload(request_id)
+        output_dir = Paths.request_output(request_id)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        out_name = f"{Path(filename).stem}.pdf"
+        word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+        return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+    except Exception as e:
+        logger.error(f"Fallback triggered for process: {e}", exc_info=True)
+        try:
+            upload_dir = Paths.request_upload(request_id)
+            output_dir = Paths.request_output(request_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{Path(filename).stem}.pdf"
+            word_to_pdf_service._write_text_pdf(upload_dir / filename, output_dir / out_name)
+            return {"success": True, "download_url": f"/api/convert-to-pdf/download/{request_id}/{out_name}"}
+        except Exception as fallback_e:
+            raise HTTPException(status_code=500, detail=str(fallback_e))

@@ -102,11 +102,6 @@ export default function QuickNavigationPage({ onBack }) {
     let targetPage = Math.max(1, Math.min(totalPages, parseInt(page) || 1));
     setCurrentPage(targetPage);
     setJumpPageInput(targetPage.toString());
-
-    // Update iframe src to jump to the page
-    if (iframeRef.current && pdfObjectUrl) {
-      iframeRef.current.src = `${pdfObjectUrl}#page=${targetPage}&view=FitH&toolbar=0&navpanes=0`;
-    }
   };
 
   const jumpToPage = () => {
@@ -405,9 +400,10 @@ export default function QuickNavigationPage({ onBack }) {
               </div>
               <div style={{ flex: 1, overflow: 'auto', WebkitOverflowScrolling: 'touch', position: 'relative' }}>
                 <iframe
+                  key={`${pdfObjectUrl}-${currentPage}`}
                   ref={iframeRef}
                   title="PDF Quick Viewer"
-                  src={`${pdfObjectUrl}#page=1&view=FitH&toolbar=0&navpanes=0`}
+                  src={`${pdfObjectUrl}#page=${currentPage}&view=FitH&toolbar=0&navpanes=0`}
                   style={{ width: '100%', height: '100%', minHeight: '600px', border: 'none', display: 'block' }}
                   className="max-sm:!min-h-0 max-sm:!h-[400px]"
                 />

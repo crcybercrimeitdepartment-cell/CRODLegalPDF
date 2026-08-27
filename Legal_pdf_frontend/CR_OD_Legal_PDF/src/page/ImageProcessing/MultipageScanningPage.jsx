@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   UploadCloud, X, ArrowLeft, Camera, Image as ImageIcon,
   FileText, Plus, Trash2, CheckCircle2, RefreshCw, Zap,
@@ -6,6 +7,8 @@ import {
 } from 'lucide-react';
 
 const MultiPageScanning = ({ tool, onBack }) => {
+  const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+  
   // State
   const [pages, setPages] = useState([]); // { id, file, status, rotation, resultData, originalUrl, showEnhanced }
   const [isProcessing, setIsProcessing] = useState(false);
@@ -58,20 +61,29 @@ const MultiPageScanning = ({ tool, onBack }) => {
     setPages(prev => [...prev, ...newPages]);
   };
 
-  // --- 2. CAMERA ---
+  // --- 2. CAMERA LOGIC ---
   const openCamera = async () => {
-    if (isProcessing) return;
     setIsCameraOpen(true);
     setCapturedBlob(null);
     try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("Camera not supported or blocked by browser security (requires HTTPS/localhost).");
+      }
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } 
+        video: true
       });
       setCameraStream(stream);
-      if (videoRef.current) videoRef.current.srcObject = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
     } catch (err) {
-      console.error(err);
-      alert("Camera access denied or unavailable.");
+      console.error("Camera error:", err);
+      let errMsg = "Unable to access the camera.";
+      if (err.name === 'NotAllowedError') errMsg = "Camera access was denied. Please allow camera permissions in your browser.";
+      else if (err.name === 'NotFoundError') errMsg = "No camera device was found on this computer.";
+      else errMsg = err.message || errMsg;
+      
+      alert(errMsg);
       closeCamera();
     }
   };
@@ -100,7 +112,8 @@ const MultiPageScanning = ({ tool, onBack }) => {
 
   const usePhoto = () => {
     if (capturedBlob) {
-      const file = new File([capturedBlob], capturedBlob.name, { type: "image/jpeg" });
+      const fileName = capturedBlob.name || `capture_${Date.now()}.jpg`;
+      const file = new File([capturedBlob], fileName, { type: "image/jpeg" });
       addFiles([file]);
       // Allow continuous capture
       setCapturedBlob(null);
@@ -186,27 +199,41 @@ const MultiPageScanning = ({ tool, onBack }) => {
 
     setIsProcessing(true);
     setProgress(0);
-
+    
     for (let i = 0; i < pagesToProcess.length; i++) {
       const pId = pagesToProcess[i].id;
       
       // Update individual status
       setPages(prev => prev.map(p => p.id === pId ? { ...p, status: 'processing' } : p));
       
-      // Simulate delay per page
-      await new Promise(r => setTimeout(r, 1200));
+      try {
+        const formData = new FormData();
+        formData.append("file", pagesToProcess[i].file);
+        
+        const res = await fetch(`${API_BASE_URL}/api/v1/scan/process`, {
+          method: "POST",
+          body: formData
+        });
+        const data = await res.json();
+        
+        if (!res.ok) throw new Error(data.detail || "Processing failed");
+        
+        setPages(prev => prev.map(p => {
+          if (p.id === pId) {
+            return {
+              ...p,
+              status: data.is_detected === false ? 'warning' : 'success',
+              job_id: data.job_id,
+              resultData: { previewUrl: `${API_BASE_URL}${data.preview_url}` }
+            };
+          }
+          return p;
+        }));
+      } catch (error) {
+        console.error(error);
+        setPages(prev => prev.map(p => p.id === pId ? { ...p, status: 'error' } : p));
+      }
 
-      setPages(prev => prev.map(p => {
-        if (p.id === pId) {
-          return {
-            ...p,
-            status: 'success',
-            resultData: { previewUrl: p.originalUrl } // Simulated enhancement via CSS
-          };
-        }
-        return p;
-      }));
-      
       setProgress((i + 1) / pagesToProcess.length);
     }
 
@@ -214,15 +241,38 @@ const MultiPageScanning = ({ tool, onBack }) => {
     setTimeout(() => setProgress(0), 1000);
   };
 
-  const generatePdf = () => {
-    const successCount = pages.filter(p => p.status === 'success' || p.status === 'warning').length;
-    if (successCount === 0) return;
+  const downloadFile = (url, name) => {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const generatePdf = async () => {
+    const completedPages = pages.filter(p => (p.status === 'success' || p.status === 'warning') && p.job_id);
+    if (completedPages.length === 0) return;
     
     setIsProcessing(true);
-    setTimeout(() => {
-      alert("Simulated: Successfully generated and downloaded multi-page PDF!");
-      setIsProcessing(false);
-    }, 1500);
+    try {
+      const jobIds = completedPages.map(p => p.job_id);
+      
+      const res = await fetch(`${API_BASE_URL}/api/v1/scan/generate-pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_ids: jobIds })
+      });
+      const data = await res.json();
+      
+      if (!res.ok) throw new Error(data.detail || "PDF generation failed");
+      
+      downloadFile(`${API_BASE_URL}${data.download_url}`, "scanned_document.pdf");
+    } catch (error) {
+      console.error(error);
+      alert("Failed to generate PDF file.");
+    }
+    setIsProcessing(false);
   };
 
 
@@ -403,9 +453,9 @@ const MultiPageScanning = ({ tool, onBack }) => {
       </div>
 
       {/* Camera Modal */}
-      {isCameraOpen && (
-        <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-md z-[100] flex flex-col items-center justify-center p-4">
-          <div className="bg-[#1e293b] border border-slate-700 rounded-2xl p-5 w-full max-w-4xl shadow-2xl flex flex-col gap-4">
+      {isCameraOpen && createPortal(
+        <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-md z-[9999] flex flex-col items-center p-4 sm:p-8 overflow-y-auto">
+          <div className="bg-[#1e293b] border border-slate-700 rounded-2xl p-4 sm:p-5 w-full max-w-4xl shadow-2xl flex flex-col gap-4 my-auto shrink-0">
             
             <div className="flex justify-between items-center border-b border-slate-700 pb-3">
               <h3 className="text-lg font-bold text-white flex items-center gap-2"><Camera className="w-5 h-5" /> Document Scanner</h3>
@@ -421,26 +471,35 @@ const MultiPageScanning = ({ tool, onBack }) => {
               <canvas ref={canvasRef} className="hidden" />
             </div>
             
-            <div className="flex justify-center pt-2">
+            <div className="flex flex-wrap justify-center gap-3 pt-2">
               {!capturedBlob ? (
-                <button onClick={capturePhoto} className="px-8 py-3 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl transition-colors shadow-lg flex items-center gap-2">
-                  <Camera className="w-5 h-5" /> Capture Page
-                </button>
+                <>
+                  <button onClick={capturePhoto} className="px-6 sm:px-8 py-3 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl transition-colors shadow-lg flex items-center gap-2">
+                    <Camera className="w-5 h-5" /> Capture Page
+                  </button>
+                  <button onClick={closeCamera} className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-xl transition-colors flex items-center gap-2">
+                    Done
+                  </button>
+                </>
               ) : (
-                <div className="flex gap-4">
-                  <button onClick={() => setCapturedBlob(null)} className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-xl transition-colors flex items-center gap-2">
+                <>
+                  <button onClick={() => setCapturedBlob(null)} className="px-5 sm:px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-xl transition-colors flex items-center gap-2">
                     <RefreshCw className="w-4 h-4" /> Retake
                   </button>
-                  <button onClick={usePhoto} className="px-6 py-3 bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-xl transition-colors shadow-lg flex items-center gap-2">
+                  <button onClick={usePhoto} className="px-5 sm:px-6 py-3 bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-xl transition-colors shadow-lg flex items-center gap-2">
                     <Plus className="w-5 h-5" /> Add to Manager
                   </button>
-                </div>
+                  <button onClick={closeCamera} className="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition-colors flex items-center gap-2">
+                    Close
+                  </button>
+                </>
               )}
             </div>
             
             {capturedBlob && <p className="text-center text-emerald-400 text-xs mt-2">Captured successfully. Add to manager or retake.</p>}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>

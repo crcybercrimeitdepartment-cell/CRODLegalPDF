@@ -1,10 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import JSZip from 'jszip';
 import { 
   UploadCloud, X, ArrowLeft, Image as ImageIcon,
   CheckCircle2, BoxSelect, Search, Download, FileArchive, RefreshCw
 } from 'lucide-react';
 
 const PerspectiveCorrection = ({ tool, onBack }) => {
+  const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+  
   // State
   const [items, setItems] = useState([]); // { id, file, status, localUrl, corners, applyData, showCropped }
   const [activeId, setActiveId] = useState(null);
@@ -51,7 +54,8 @@ const PerspectiveCorrection = ({ tool, onBack }) => {
         { x: 0.1, y: 0.9 }
       ], // Default safe corners mapping 10% from edges
       applyData: null,
-      showCropped: true
+      showCropped: true,
+      job_id: null
     }));
 
     setItems(prev => {
@@ -71,7 +75,7 @@ const PerspectiveCorrection = ({ tool, onBack }) => {
     });
   };
 
-  // --- 2. DETECTION (Simulated Auto Detect) ---
+  // --- 2. DETECTION (Backend Auto Detect) ---
   const detectBorders = async () => {
     if (!activeItem) return;
     lockUI("Detecting corners automatically...");
@@ -79,29 +83,36 @@ const PerspectiveCorrection = ({ tool, onBack }) => {
     setItems(prev => prev.map(i => i.id === activeId ? { ...i, status: 'detecting' } : i));
 
     try {
-      await new Promise(r => setTimeout(r, 1200)); 
-      
-      const simulatedCorners = [
-        { x: 0.12, y: 0.15 }, 
-        { x: 0.88, y: 0.12 }, 
-        { x: 0.85, y: 0.85 }, 
-        { x: 0.18, y: 0.88 }
-      ];
+      const formData = new FormData();
+      formData.append("file", activeItem.file);
+
+      const res = await fetch(`${API_BASE_URL}/api/v1/images/perspective/upload`, {
+        method: "POST",
+        body: formData
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.detail || "Detection failed");
 
       setItems(prev => prev.map(i => {
         if (i.id === activeId) {
-          return { ...i, status: 'detected', corners: simulatedCorners };
+          return { 
+            ...i, 
+            status: 'detected', 
+            corners: (data.corners && data.corners.length === 4) ? data.corners : i.corners,
+            job_id: data.job_id
+          };
         }
         return i;
       }));
     } catch(err) {
+      console.error(err);
       setItems(prev => prev.map(i => i.id === activeId ? { ...i, status: 'failed' } : i));
     }
     
     unlockUI();
   };
 
-  // --- 3. APPLY CORRECTION (Simulated) ---
+  // --- 3. APPLY CORRECTION (Backend) ---
   const applyCorrection = async () => {
     if (!activeItem || activeItem.corners.length !== 4) return;
     lockUI("Applying perspective correction...");
@@ -109,20 +120,51 @@ const PerspectiveCorrection = ({ tool, onBack }) => {
     setItems(prev => prev.map(i => i.id === activeId ? { ...i, status: 'processing' } : i));
 
     try {
-      await new Promise(r => setTimeout(r, 1200));
+      let currentJobId = activeItem.job_id;
       
+      // Upload if not already uploaded (e.g. if user just dragged manually and hit Apply)
+      if (!currentJobId) {
+        const formData = new FormData();
+        formData.append("file", activeItem.file);
+        
+        const uploadRes = await fetch(`${API_BASE_URL}/api/v1/images/perspective/upload`, {
+          method: "POST",
+          body: formData
+        });
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok) throw new Error(uploadData.detail || "Upload failed");
+        
+        currentJobId = uploadData.job_id;
+      }
+
+      const applyRes = await fetch(`${API_BASE_URL}/api/v1/images/perspective/apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job_id: currentJobId,
+          corners: activeItem.corners
+        })
+      });
+      const applyData = await applyRes.json();
+      if (!applyRes.ok || !applyData.success) throw new Error(applyData.detail || "Correction failed");
+
+      const resultPreviewUrl = `${API_BASE_URL}${applyData.preview_url}`;
+
       setItems(prev => prev.map(i => {
         if (i.id === activeId) {
           return { 
             ...i, 
             status: 'completed',
-            applyData: { previewUrl: i.localUrl }, // For simulation, show original, use CSS zoom effect
-            showCropped: true
+            applyData: { previewUrl: resultPreviewUrl },
+            processedUrl: resultPreviewUrl,
+            showCropped: true,
+            job_id: currentJobId
           };
         }
         return i;
       }));
     } catch(err) {
+      console.error("Correction Error:", err);
       setItems(prev => prev.map(i => i.id === activeId ? { ...i, status: 'failed' } : i));
     }
     
@@ -131,6 +173,39 @@ const PerspectiveCorrection = ({ tool, onBack }) => {
 
   const toggleView = () => {
     setItems(prev => prev.map(i => i.id === activeId ? { ...i, showCropped: !i.showCropped } : i));
+  };
+  
+  const lockUI = (msg) => { setIsProcessing(true); setProcessingText(msg); };
+  const unlockUI = () => setIsProcessing(false);
+
+  const downloadFile = (url, name) => {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const downloadAllZip = async () => {
+    const completedItems = items.filter(i => i.status === 'completed' && i.processedUrl);
+    if (completedItems.length === 0) return alert("No corrected images to download.");
+    
+    lockUI("Generating ZIP file...");
+    try {
+      const zip = new JSZip();
+      for (const item of completedItems) {
+        const response = await fetch(item.processedUrl);
+        const blob = await response.blob();
+        zip.file(`perspective_${item.file.name}`, blob);
+      }
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      downloadFile(URL.createObjectURL(zipBlob), "perspective_corrected_images.zip");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to generate ZIP file.");
+    }
+    unlockUI();
   };
 
 
@@ -257,27 +332,6 @@ const PerspectiveCorrection = ({ tool, onBack }) => {
     }
   }, []);
 
-  
-  // Helpers
-  const lockUI = (msg) => {
-    setIsProcessing(true);
-    setProcessingText(msg);
-  };
-  const unlockUI = () => setIsProcessing(false);
-
-  const downloadFile = (url, name) => {
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
-
-  const downloadAllZip = () => {
-    alert("Simulated ZIP generation for processed files.");
-  };
-
   const successCount = items.filter(i => i.status === 'completed').length;
   const failedCount = items.filter(i => i.status === 'failed').length;
 
@@ -383,9 +437,9 @@ const PerspectiveCorrection = ({ tool, onBack }) => {
                 <div className="relative inline-flex items-center justify-center max-w-full max-h-full">
                   <img 
                     ref={imageRef}
-                    src={activeItem.localUrl} 
+                    src={(activeItem.status === 'completed' && activeItem.showCropped && activeItem.processedUrl) ? activeItem.processedUrl : activeItem.localUrl} 
                     alt="Active" 
-                    className={`max-w-full max-h-[70vh] object-contain pointer-events-none transition-transform duration-500 ${activeItem.status === 'completed' && activeItem.showCropped ? 'scale-105 shadow-[0_0_30px_rgba(219,39,119,0.2)]' : 'shadow-2xl'}`}
+                    className={`max-w-full max-h-[70vh] object-contain pointer-events-none transition-transform duration-500 ${activeItem.status === 'completed' && activeItem.showCropped ? 'shadow-[0_0_30px_rgba(219,39,119,0.2)]' : 'shadow-2xl'}`}
                     onLoad={drawCanvas}
                   />
                   
@@ -444,7 +498,7 @@ const PerspectiveCorrection = ({ tool, onBack }) => {
 
                   {activeItem.status === 'completed' ? (
                     <button 
-                      onClick={() => downloadFile(activeItem.localUrl, `perspective_${activeItem.file.name}`)}
+                      onClick={() => downloadFile(activeItem.processedUrl || activeItem.localUrl, `perspective_${activeItem.file.name}`)}
                       className="px-4 py-2 bg-white hover:bg-slate-800 text-pink-400 border border-slate-200 text-xs font-bold rounded-lg transition-colors flex items-center gap-2"
                     >
                       <Download className="w-3.5 h-3.5" /> Download

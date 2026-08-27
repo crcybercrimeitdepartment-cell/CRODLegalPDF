@@ -67,6 +67,8 @@ const RemoveNoise = ({ tool, onBack }) => {
   };
 
 
+  const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
   // --- 2. APPLY DENOISE ---
   const applyDenoise = async () => {
     if (!activeItem || (activeItem.status !== 'ready' && activeItem.status !== 'success' && activeItem.status !== 'failed')) return;
@@ -75,23 +77,50 @@ const RemoveNoise = ({ tool, onBack }) => {
     setItems(prev => prev.map(i => i.id === activeId ? { ...i, status: 'processing', level: currentLevel } : i));
 
     try {
-      await new Promise(r => setTimeout(r, 1200 + Math.random() * 800)); // Simulate process
+      let currentJobId = activeItem.job_id;
       
-      const hasNoise = Math.random() > 0.15; // 85% chance it had noise
-      
+      if (!currentJobId) {
+        const formData = new FormData();
+        formData.append("file", activeItem.file);
+        
+        const uploadRes = await fetch(`${API_BASE_URL}/api/v1/images/image-denoise/upload`, {
+          method: "POST",
+          body: formData
+        });
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok) throw new Error(uploadData.detail || "Upload failed");
+        
+        currentJobId = uploadData.job_id;
+      }
+
+      const applyRes = await fetch(`${API_BASE_URL}/api/v1/images/image-denoise/apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job_id: currentJobId,
+          level: currentLevel
+        })
+      });
+      const applyData = await applyRes.json();
+      if (!applyRes.ok || !applyData.success) throw new Error(applyData.detail || "Denoise failed");
+
+      const resultPreviewUrl = `${API_BASE_URL}${applyData.preview_url}`;
+
       setItems(prev => prev.map(i => {
         if (i.id === activeId) {
           return { 
             ...i, 
             status: 'success',
-            detectionStatus: hasNoise ? 'success' : 'no_noise',
-            previewUrl: i.originalUrl, // Mock final URL
-            showDenoised: hasNoise
+            detectionStatus: 'success', // We assume noise was reduced
+            previewUrl: resultPreviewUrl,
+            showDenoised: true,
+            job_id: currentJobId
           };
         }
         return i;
       }));
     } catch(err) {
+      console.error(err);
       setItems(prev => prev.map(i => i.id === activeId ? { ...i, status: 'failed' } : i));
     }
     
@@ -119,8 +148,30 @@ const RemoveNoise = ({ tool, onBack }) => {
     document.body.removeChild(a);
   };
 
-  const downloadAllZip = () => {
-    alert("Simulated ZIP generation for processed files.");
+  const downloadAllZip = async () => {
+    const completedItems = items.filter(i => i.status === 'success' && i.job_id);
+    if (completedItems.length === 0) return alert("No denoised images to download.");
+    
+    lockUI("Generating ZIP file...");
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/images/image-denoise/batch-apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jobs: completedItems.map(i => ({ job_id: i.job_id })),
+          level: currentLevel
+        })
+      });
+      
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.detail || "Batch process failed");
+      
+      downloadFile(`${API_BASE_URL}${data.download_url}`, "denoised_images.zip");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to generate ZIP file.");
+    }
+    unlockUI();
   };
 
   // Stats
@@ -161,12 +212,8 @@ const RemoveNoise = ({ tool, onBack }) => {
                 >
                   <div className="w-12 h-12 rounded overflow-hidden bg-slate-100 shrink-0 border border-slate-200 relative">
                     <img 
-                      src={item.originalUrl} 
-                      className="absolute inset-0 w-full h-full object-cover transition-all" 
-                      style={{ 
-                        filter: item.showDenoised ? 'blur(0px) contrast(1.1)' : 'blur(0px)',
-                        // In reality, it would just show the denoised image from backend. Mocking denoise visually is hard, so we just toggle slight contrast.
-                      }}
+                      src={(item.status === 'success' && item.showDenoised && item.previewUrl) ? item.previewUrl : item.originalUrl} 
+                      className="absolute inset-0 w-full h-full object-cover transition-opacity duration-300" 
                       alt="thumb" 
                     />
                   </div>
@@ -265,16 +312,10 @@ const RemoveNoise = ({ tool, onBack }) => {
               ) : (
                 <div className="relative inline-flex items-center justify-center max-w-full max-h-full w-full h-full">
                   
-                  {/* Mock Visual (We use slight filter for denoised to show a change happened) */}
                   <img 
-                    src={activeItem.originalUrl} 
+                    src={(activeItem.status === 'success' && activeItem.showDenoised && activeItem.previewUrl) ? activeItem.previewUrl : activeItem.originalUrl} 
                     alt="Active" 
-                    className="max-w-full max-h-full object-contain transition-all duration-300 shadow-2xl"
-                    style={{ 
-                      filter: (activeItem.status === 'success' && activeItem.showDenoised) 
-                        ? (currentLevel === 'high' ? 'blur(0.5px) contrast(1.15)' : currentLevel === 'low' ? 'blur(0px) contrast(1.05)' : 'blur(0.2px) contrast(1.1)') 
-                        : 'none'
-                    }}
+                    className={`max-w-full max-h-full object-contain transition-transform duration-500 ${activeItem.status === 'success' && activeItem.showDenoised ? 'shadow-[0_0_30px_rgba(6,182,212,0.2)]' : 'shadow-2xl'}`}
                   />
 
                   {/* Processing Overlay */}

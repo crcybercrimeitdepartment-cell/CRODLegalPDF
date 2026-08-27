@@ -161,65 +161,46 @@ const BgReplaceImages = ({ tool, onBack }) => {
     setIsProcessing(true);
     
     try {
-      // Background replacement is a backend AI task.
-      // Frontend fallback: Draw background, then draw image over it.
-      await new Promise(r => setTimeout(r, 1500));
+      const formData = new FormData();
+      formData.append('file', activeFile.file);
       
-      const canvas = document.createElement('canvas');
-      canvas.width = activeFile.origW;
-      canvas.height = activeFile.origH;
-      const ctx = canvas.getContext('2d');
+      const stateObj = {
+        bg_type: bgType,
+        color_hex: colorHex,
+        gradient_name: gradientName,
+        pattern_name: patternName
+      };
       
-      // Draw background
-      if (bgType === 'color') {
-        ctx.fillStyle = colorHex;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-      } else if (bgType === 'gradient') {
-        const grd = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-        if (gradientName === 'sunset') { grd.addColorStop(0, '#ff7e5f'); grd.addColorStop(1, '#feb47b'); }
-        else if (gradientName === 'ocean') { grd.addColorStop(0, '#2b5876'); grd.addColorStop(1, '#4e4376'); }
-        else if (gradientName === 'neon') { grd.addColorStop(0, '#833ab4'); grd.addColorStop(1, '#fd1d1d'); }
-        else if (gradientName === 'emerald') { grd.addColorStop(0, '#11998e'); grd.addColorStop(1, '#38ef7d'); }
-        else { grd.addColorStop(0, '#6a11cb'); grd.addColorStop(1, '#2575fc'); }
-        ctx.fillStyle = grd;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-      } else if (bgType === 'image' && customBgUrl) {
-        const bgImg = new Image();
-        bgImg.src = customBgUrl;
-        await new Promise(r => bgImg.onload = r);
-        
-        // Cover logic
-        const hRatio = canvas.width / bgImg.width;
-        const vRatio = canvas.height / bgImg.height;
-        const ratio  = Math.max(hRatio, vRatio);
-        const centerShift_x = (canvas.width - bgImg.width*ratio) / 2;
-        const centerShift_y = (canvas.height - bgImg.height*ratio) / 2;  
-        ctx.drawImage(bgImg, 0, 0, bgImg.width, bgImg.height, centerShift_x, centerShift_y, bgImg.width*ratio, bgImg.height*ratio);
-      } else {
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      formData.append('state', JSON.stringify(stateObj));
+      
+      if (bgType === 'image' && customBgFile) {
+        formData.append('bg_file', customBgFile);
       }
-
-      // Draw original image on top
-      const img = new Image();
-      img.src = activeFile.dataUrl;
-      await new Promise(r => img.onload = r);
-      ctx.drawImage(img, 0, 0);
       
-      canvas.toBlob((blob) => {
-        setUploadedFiles(prev => {
-          const up = [...prev];
-          up[activeIndex].processedBlob = blob;
-          up[activeIndex].processedUrl = URL.createObjectURL(blob);
-          return up;
-        });
-        setIsProcessing(false);
-      }, 'image/jpeg');
+      const response = await fetch('/api/v1/images/bg-replace', {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || 'Background replacement failed on the server.');
+      }
+      
+      const blob = await response.blob();
+      
+      setUploadedFiles(prev => {
+        const up = [...prev];
+        up[activeIndex].processedBlob = blob;
+        up[activeIndex].processedUrl = URL.createObjectURL(blob);
+        return up;
+      });
+      setIsProcessing(false);
       
     } catch(err) {
       console.error("BG Replace Error:", err);
       setIsProcessing(false);
-      alert("Failed to replace background.");
+      alert("Failed to replace background: " + err.message);
     }
   };
 
@@ -244,7 +225,14 @@ const BgReplaceImages = ({ tool, onBack }) => {
       return;
     }
     
-    alert("Batch ZIP saving requires the backend API which is currently simulated.");
+    // Fallback: download all processed files individually since batch endpoint takes files as input
+    // which we already processed here.
+    processed.forEach((item, i) => {
+      setTimeout(() => {
+        const nameWithoutExt = item.name.replace(/\.[^/.]+$/, "");
+        downloadFile(item.processedBlob, `bg_replaced_${nameWithoutExt}.jpg`);
+      }, i * 300);
+    });
   };
 
   return (

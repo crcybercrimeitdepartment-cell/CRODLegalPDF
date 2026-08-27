@@ -86,6 +86,22 @@ class AdvancedSearchService:
             for page_idx in range(total_pages):
                 page = doc[page_idx]
                 page_text = page.get_text("text") or ""
+                
+                # --- OCR Fallback for Scanned PDFs ---
+                if len(page_text.strip()) < 10:
+                    try:
+                        import pytesseract
+                        from PIL import Image
+                        # Use 150 DPI for a good balance of speed and OCR accuracy
+                        pix = page.get_pixmap(dpi=150)
+                        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                        ocr_text = pytesseract.image_to_string(img)
+                        if ocr_text:
+                            page_text = ocr_text
+                    except Exception as e:
+                        pass # Ignore OCR errors and fallback to empty text
+                # -------------------------------------
+
                 lines = page_text.splitlines()
 
                 for line_idx, line in enumerate(lines):

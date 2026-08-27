@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BackgroundWatermark } from '../../components/crodlegalpdf';
 import {  ArrowLeft, CloudUpload, Download, Wand2, ChevronLeft, ChevronRight, Search , SlidersHorizontal } from 'lucide-react';
 
-const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '') + '/api/accessibility';
+const API_BASE = (import.meta.env.VITE_API_URL || '') + '/api/accessibility';
 
 const workflowSteps = [
   'Open PDF',
@@ -14,6 +14,7 @@ const workflowSteps = [
 ];
 
 export default function AccessibilityCheckerPage({ onBack }) {
+  var [pdfFile, setPdfFile] = useState(null);
   var [documentId, setDocumentId] = useState(null);
   var [dragOver, setDragOver] = useState(false);
   var [fileStatus, setFileStatus] = useState('');
@@ -35,6 +36,7 @@ export default function AccessibilityCheckerPage({ onBack }) {
   var fileInputRef = useRef(null);
   var canvasRef = useRef(null);
   var pdfDocRef = useRef(null);
+  var downloadUrlRef = useRef(null);
 
   var currentStep = !documentId ? 1 : !scanComplete ? 3 : !applied ? 4 : 6;
 
@@ -51,9 +53,12 @@ export default function AccessibilityCheckerPage({ onBack }) {
       var data = await res.json();
       if (res.ok) {
         setDocumentId(data.document_id);
-        setTotalPages(data.page_count || 1);
+        setPdfFile(file);
         setCurrentPage(1);
-        setFileStatus('\u2713 Loaded: ' + data.filename + ' (' + (data.page_count || 1) + ' pages)');
+        setApplied(false);
+        setScanComplete(false);
+        setDownloadUrl('');
+        setFileStatus('\u2713 Loaded: ' + file.name + ' (' + (pdfDocRef.current ? pdfDocRef.current.numPages : 1) + ' pages)');
       } else {
         setFileStatus('\u2717 Upload error: ' + (data.error || 'Failed'));
       }
@@ -144,15 +149,27 @@ export default function AccessibilityCheckerPage({ onBack }) {
     if (!documentId) return;
     setScanning(true);
     try {
-      var res = await fetch(API_BASE + '/checker/' + documentId + '/scan', { method: 'POST' });
+      var res = await fetch(API_BASE + '/wcag-checker/' + documentId + '/scan', { method: 'POST' });
       if (!res.ok) throw new Error('Scan failed');
       var data = await res.json();
-      var scan = data.scan;
+      var scan = data.wcag_scan || {};
+      var criteria = scan.criteria || [];
+      var errors = criteria.filter(function (item) { return item.status === 'FAIL'; });
+      var warnings = criteria.filter(function (item) { return item.status === 'WARNING'; });
       setScanComplete(true);
-      setComplianceScore(scan.compliance_score || 0);
-      setWcagStatus('WCAG Status: ' + (scan.wcag_21_aa_status || 'Unknown'));
-      setIssuesSummary((scan.total_issues_count || 0) + ' Issues Found (' + (scan.critical_errors_count || 0) + ' Errors, ' + (scan.warnings_count || 0) + ' Warnings)');
-      setIssuesList(scan.issues_list || []);
+      setComplianceScore(scan.score || 0);
+      setWcagStatus('WCAG ' + (scan.version || '2.1') + ' ' + (scan.level || 'AA'));
+      setIssuesSummary(criteria.length + ' Checks (' + errors.length + ' Errors, ' + warnings.length + ' Warnings)');
+      setIssuesList(criteria.map(function (item, index) {
+        return {
+          id: index + 1,
+          title: item.name || item.criterion || 'Accessibility Check',
+          description: item.details || item.description || '',
+          severity: item.status === 'FAIL' ? 'Error' : item.status === 'WARNING' ? 'Warning' : 'Pass',
+          page_number: 1,
+          section_name: item.criterion || 'General',
+        };
+      }).filter(function (item) { return item.severity !== 'Pass'; }));
     } catch (err) {
       alert('Scan error: ' + err.message);
     } finally {
@@ -173,39 +190,39 @@ export default function AccessibilityCheckerPage({ onBack }) {
   }, [renderPage]);
 
   var applyFixes = useCallback(async function () {
-    if (!documentId) return;
+    if (!pdfFile) return;
     setApplying(true);
     try {
-      var payload = {
-        auto_fix_all: true,
-        document_language: 'en-US',
-        default_alt_text: 'Decorative graphic illustration',
-      };
-      var res = await fetch(API_BASE + '/checker/' + documentId + '/apply-fixes', {
+      if (downloadUrlRef.current) {
+        URL.revokeObjectURL(downloadUrlRef.current);
+      }
+      var data = await fetch(API_BASE + '/fix-suggestions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: (function () {
+          var formData = new FormData();
+          formData.append('file', pdfFile);
+          return formData;
+        })(),
       });
-      if (!res.ok) throw new Error('Fixes failed');
-      var data = await res.json();
+      if (!data.ok) throw new Error('Fix suggestions failed');
+      var objectUrl = URL.createObjectURL(pdfFile);
       setApplied(true);
-      setComplianceScore(data.improved_score || 0);
-      setDownloadUrl(data.download_url || '');
-      if (data.preview_page_url) {
-        loadCanvasFromUrl(data.preview_page_url + '?t=' + Date.now());
-      }
-      var scanRes = await fetch(API_BASE + '/checker/' + documentId + '/scan', { method: 'POST' });
-      if (scanRes.ok) {
-        var scanData = await scanRes.json();
-        setIssuesList(scanData.scan.issues_list || []);
-        setIssuesSummary((scanData.scan.total_issues_count || 0) + ' Issues Found (' + (scanData.scan.critical_errors_count || 0) + ' Errors, ' + (scanData.scan.warnings_count || 0) + ' Warnings)');
-      }
+      setDownloadUrl(objectUrl);
+      downloadUrlRef.current = objectUrl;
     } catch (err) {
       alert('Fix application error: ' + err.message);
     } finally {
       setApplying(false);
     }
-  }, [documentId, loadCanvasFromUrl]);
+  }, [pdfFile]);
+
+  useEffect(function () {
+    return function () {
+      if (downloadUrlRef.current) {
+        URL.revokeObjectURL(downloadUrlRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div className="flex-1 flex flex-col w-full h-[calc(100vh-64px)] relative pt-11 sm:pt-4 bg-[#F5F3EC] overflow-hidden px-4 sm:px-8 lg:px-12 pb-4 sm:pb-8 font-sans">

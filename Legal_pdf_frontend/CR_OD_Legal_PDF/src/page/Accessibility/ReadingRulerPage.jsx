@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BackgroundWatermark } from '../../components/crodlegalpdf';
 import { ArrowLeft, Upload, Download, FileText, Ruler, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, MousePointer, Keyboard } from 'lucide-react';
 
-const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '') + '/api/accessibility';
+const API_BASE = (import.meta.env.VITE_API_URL || '') + '/api/accessibility';
 
 var styles = [
   { value: 'Highlight Line', label: 'Highlight Line' },
@@ -31,6 +31,8 @@ export default function ReadingRulerPage({ onBack }) {
   var [keyboardTracking, setKeyboardTracking] = useState(true);
 
   var [formattedHtml, setFormattedHtml] = useState('');
+  var [formattedPages, setFormattedPages] = useState([]);
+  var [currentPreviewPage, setCurrentPreviewPage] = useState(1);
   var [totalLines, setTotalLines] = useState(0);
   var [activeLineIndex, setActiveLineIndex] = useState(0);
 
@@ -91,11 +93,15 @@ export default function ReadingRulerPage({ onBack }) {
       });
       if (!res.ok) throw new Error('Extraction failed');
       var data = await res.json();
-      setFormattedHtml(data.extracted_html || '');
-      setTotalLines(data.total_lines_count || 0);
+      setFormattedHtml(data.formatted_html || data.extracted_html || '');
+      setFormattedPages(Array.isArray(data.formatted_pages) ? data.formatted_pages : []);
+      setCurrentPreviewPage(1);
+      setTotalLines(data.blocks ? data.blocks.length : 0);
       setActiveLineIndex(0);
     } catch (err) {
       setFormattedHtml('<div style="color: #ef4444; padding: 20px;">Failed: ' + err.message + '</div>');
+      setFormattedPages([]);
+      setCurrentPreviewPage(1);
     }
   }, [documentId, rulerStyle, rulerHeight, dimOpacity, keyboardTracking]);
 
@@ -163,6 +169,10 @@ export default function ReadingRulerPage({ onBack }) {
     }
   }, [documentId, rulerStyle, rulerHeight, dimOpacity, keyboardTracking]);
 
+  var activePreviewPage = formattedPages.length > 0
+    ? (formattedPages.find(function (page) { return page.page_number === currentPreviewPage; }) || formattedPages[0])
+    : null;
+
   var getRulerStyle = function () {
     if (rulerStyle === 'Highlight Line') {
       return { backgroundColor: 'rgba(251,191,36,0.28)', borderTop: '2px solid #f59e0b', borderBottom: '2px solid #f59e0b' };
@@ -207,8 +217,8 @@ export default function ReadingRulerPage({ onBack }) {
         
 
         <div className="flex-1 flex flex-col lg:flex-row w-full max-w-[1920px] mx-auto mt-12 sm:mt-16 lg:mt-20 border border-slate-200 bg-white overflow-hidden rounded-xl shadow-[0_15px_50px_rgba(0,0,0,0.05)] relative z-10">
-        <div className="w-full lg:w-[340px] border-r border-slate-200 bg-slate-50 flex flex-col shrink-0 overflow-y-auto p-5 z-20">
-          <div className="flex flex-col gap-2">
+        <div className="w-full lg:w-[340px] border-r border-slate-200 bg-slate-50 flex flex-col shrink-0 overflow-y-auto p-5 z-20 gap-5">
+          <div className="flex flex-col gap-3">
             <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
               <FileText className="w-3.5 h-3.5" /> 1. Open PDF Document
             </div>
@@ -226,7 +236,7 @@ export default function ReadingRulerPage({ onBack }) {
             {fileStatus && <div className="text-xs font-semibold" style={{ color: fileStatus.indexOf('\u2713') >= 0 ? '#10b981' : '#ef4444' }}>{fileStatus}</div>}
           </div>
 
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-4">
             <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
               <span className="text-base">{'\u2699'}</span> 2. Reading Ruler Options
             </div>
@@ -286,7 +296,7 @@ export default function ReadingRulerPage({ onBack }) {
             </div>
           </div>
 
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-3">
             <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
               <FileText className="w-3.5 h-3.5" /> 3. Save & Export PDF
             </div>
@@ -306,7 +316,7 @@ export default function ReadingRulerPage({ onBack }) {
             )}
           </div>
 
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-3">
             <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
               <span className="text-base">{'\uD83D\uDCCA'}</span> User Workflow Progress
             </div>
@@ -357,6 +367,34 @@ export default function ReadingRulerPage({ onBack }) {
                   <div className="text-center text-slate-500 text-sm py-12">
                     <Ruler className="w-10 h-10 text-amber-400 mx-auto mb-3" />
                     Upload a PDF to activate movable line reading ruler and focus masking.
+                  </div>
+                ) : formattedPages.length > 0 && activePreviewPage ? (
+                  <div className="flex flex-col gap-6 h-full">
+                    <div className="sticky top-0 z-10 flex items-center justify-between rounded-lg border border-slate-200 bg-white/95 px-4 py-2 backdrop-blur-sm shadow-sm" style={{ fontSize: '16px' }}>
+                      <button
+                        onClick={function () { setCurrentPreviewPage(function (prev) { return Math.max(1, prev - 1); }); }}
+                        disabled={currentPreviewPage <= 1}
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700 disabled:opacity-40"
+                      >
+                        <ChevronLeft className="w-4 h-4" /> Prev
+                      </button>
+                      <div className="flex items-center gap-3">
+                        <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Preview Page</span>
+                        <span className="rounded-full bg-slate-800 px-3 py-1 text-[11px] font-semibold text-white">
+                          Page {activePreviewPage.page_number} of {formattedPages.length}
+                        </span>
+                      </div>
+                      <button
+                        onClick={function () { setCurrentPreviewPage(function (prev) { return Math.min(formattedPages.length, prev + 1); }); }}
+                        disabled={currentPreviewPage >= formattedPages.length}
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700 disabled:opacity-40"
+                      >
+                        Next <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <section key={activePreviewPage.page_number} className="bg-transparent">
+                      <div dangerouslySetInnerHTML={{ __html: activePreviewPage.html }} />
+                    </section>
                   </div>
                 ) : (
                   <div dangerouslySetInnerHTML={{ __html: formattedHtml }} />

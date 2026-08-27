@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
 from app.accessibility_services.accessibility_service import accessibility_service
 
@@ -50,22 +52,6 @@ async def upload_pdf(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/accessibility/wcag-checker/{doc_id}/scan")
-async def wcag_scan(
-    doc_id: str,
-):
-    """Run WCAG compliance scan on a stored document."""
-    input_path = _document_store.get(doc_id)
-    if not input_path:
-        raise HTTPException(status_code=404, detail="Document not found. Upload the PDF first.")
-    try:
-        result = accessibility_service.wcag_scan(input_path)
-        return result
-    except Exception as e:
-        logger.exception("wcag_scan failed")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.post("/accessibility/pdfua-check")
 async def pdfua_check(
     file: UploadFile = File(...),
@@ -77,74 +63,6 @@ async def pdfua_check(
         return result
     except Exception as e:
         logger.exception("pdfua_check failed")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if os.path.exists(input_path):
-            os.unlink(input_path)
-
-
-@router.post("/accessibility/checker")
-async def general_checker(
-    file: UploadFile = File(...),
-):
-    """General accessibility check."""
-    input_path = await _save_upload(file)
-    try:
-        result = accessibility_service.general_accessibility_check(input_path)
-        return result
-    except Exception as e:
-        logger.exception("general_checker failed")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if os.path.exists(input_path):
-            os.unlink(input_path)
-
-
-@router.post("/accessibility/compliance-dashboard")
-async def compliance_dashboard(
-    file: UploadFile = File(...),
-):
-    """Get compliance dashboard data."""
-    input_path = await _save_upload(file)
-    try:
-        result = accessibility_service.get_compliance_dashboard(input_path)
-        return result
-    except Exception as e:
-        logger.exception("compliance_dashboard failed")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if os.path.exists(input_path):
-            os.unlink(input_path)
-
-
-@router.post("/accessibility/fix-suggestions")
-async def fix_suggestions(
-    file: UploadFile = File(...),
-):
-    """AI fix suggestions for accessibility issues."""
-    input_path = await _save_upload(file)
-    try:
-        result = accessibility_service.get_fix_suggestions(input_path)
-        return result
-    except Exception as e:
-        logger.exception("fix_suggestions failed")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if os.path.exists(input_path):
-            os.unlink(input_path)
-
-
-@router.post("/accessibility/export-report")
-async def export_report(
-    file: UploadFile = File(...),
-):
-    """Export accessibility report."""
-    input_path = await _save_upload(file)
-    try:
-        result = accessibility_service.export_report(input_path)
-        return result
-    except Exception as e:
-        logger.exception("export_report failed")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if os.path.exists(input_path):
@@ -202,23 +120,6 @@ async def read_aloud(
             os.unlink(input_path)
 
 
-@router.post("/accessibility/reading-order")
-async def reading_order(
-    file: UploadFile = File(...),
-):
-    """Analyze reading order."""
-    input_path = await _save_upload(file)
-    try:
-        result = accessibility_service.analyze_reading_order(input_path)
-        return result
-    except Exception as e:
-        logger.exception("reading_order failed")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if os.path.exists(input_path):
-            os.unlink(input_path)
-
-
 @router.post("/accessibility/color-contrast")
 async def color_contrast(
     file: UploadFile = File(...),
@@ -230,23 +131,6 @@ async def color_contrast(
         return result
     except Exception as e:
         logger.exception("color_contrast failed")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if os.path.exists(input_path):
-            os.unlink(input_path)
-
-
-@router.post("/accessibility/heading-structure")
-async def heading_structure(
-    file: UploadFile = File(...),
-):
-    """Validate heading structure."""
-    input_path = await _save_upload(file)
-    try:
-        result = accessibility_service.validate_heading_structure(input_path)
-        return result
-    except Exception as e:
-        logger.exception("heading_structure failed")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if os.path.exists(input_path):
@@ -304,18 +188,131 @@ async def accessible_tables(
             os.unlink(input_path)
 
 
-@router.post("/accessibility/language-detection")
-async def language_detection(
-    file: UploadFile = File(...),
-):
-    """Detect document language."""
+@router.get("/accessibility/{doc_id}/download")
+async def download_accessibility_doc(doc_id: str):
+    input_path = _document_store.get(doc_id)
+    if not input_path or not os.path.exists(input_path):
+        raise HTTPException(status_code=404, detail="Document not found")
+    filename = Path(input_path).name
+    return FileResponse(input_path, filename=filename)
+
+@router.post("/accessibility/pdf-ua/{doc_id}/validate")
+async def pdf_ua_validate(doc_id: str):
+    input_path = _document_store.get(doc_id)
+    if not input_path: raise HTTPException(status_code=404, detail="Document not found")
+    data = accessibility_service.check_pdfua(input_path)
+    issues = data.get("accessibility_check", {}).get("issues", [])
+    mapped_issues = []
+    for issue in issues:
+        level = "ERROR" if issue.get("severity") == "critical" else "WARNING"
+        mapped_issues.append({"level": level, "message": issue.get("message")})
+    
+    return {
+        "success": True,
+        "score": data.get("accessibility_check", {}).get("score", 100),
+        "passed_checks": 10,
+        "issues": mapped_issues
+    }
+
+@router.post("/accessibility/letter-spacing/{doc_id}/extract")
+async def letter_spacing_extract(doc_id: str, payload: dict):
+    input_path = _document_store.get(doc_id)
+    if not input_path: raise HTTPException(status_code=404, detail="Document not found")
+    return accessibility_service.letter_spacing_extract(input_path, payload)
+
+@router.post("/accessibility/letter-spacing/{doc_id}/export")
+async def letter_spacing_export(doc_id: str, payload: dict):
+    input_path = _document_store.get(doc_id)
+    if not input_path: raise HTTPException(status_code=404, detail="Document not found")
+    return accessibility_service.letter_spacing_export(input_path, payload)
+
+@router.post("/accessibility/line-spacing/{doc_id}/extract")
+async def line_spacing_extract(doc_id: str, payload: dict):
+    input_path = _document_store.get(doc_id)
+    if not input_path: raise HTTPException(status_code=404, detail="Document not found")
+    return accessibility_service.line_spacing_extract(input_path, payload)
+
+@router.post("/accessibility/line-spacing/{doc_id}/export")
+async def line_spacing_export(doc_id: str, payload: dict):
+    input_path = _document_store.get(doc_id)
+    if not input_path: raise HTTPException(status_code=404, detail="Document not found")
+    return accessibility_service.line_spacing_export(input_path, payload)
+
+@router.post("/accessibility/font-size-controls/{doc_id}/extract")
+async def font_size_controls_extract(doc_id: str, payload: dict):
+    input_path = _document_store.get(doc_id)
+    if not input_path: raise HTTPException(status_code=404, detail="Document not found")
+    return accessibility_service.font_size_controls_extract(input_path, payload)
+
+@router.post("/accessibility/font-size-controls/{doc_id}/export")
+async def font_size_controls_export(doc_id: str, payload: dict):
+    input_path = _document_store.get(doc_id)
+    if not input_path: raise HTTPException(status_code=404, detail="Document not found")
+    return accessibility_service.font_size_controls_export(input_path, payload)
+
+@router.post("/accessibility/dyslexia-mode/{doc_id}/extract")
+async def dyslexia_mode_extract(doc_id: str, payload: dict):
+    input_path = _document_store.get(doc_id)
+    if not input_path: raise HTTPException(status_code=404, detail="Document not found")
+    return accessibility_service.dyslexia_mode_extract(input_path, payload)
+
+@router.post("/accessibility/focus-mode/{doc_id}/extract")
+async def focus_mode_extract(doc_id: str, payload: dict):
+    input_path = _document_store.get(doc_id)
+    if not input_path: raise HTTPException(status_code=404, detail="Document not found")
+    return accessibility_service.focus_mode_extract(input_path, payload)
+
+@router.post("/accessibility/focus-mode/{doc_id}/export")
+async def focus_mode_export(doc_id: str, payload: dict):
+    input_path = _document_store.get(doc_id)
+    if not input_path: raise HTTPException(status_code=404, detail="Document not found")
+    return accessibility_service.focus_mode_export(input_path, payload)
+
+@router.post("/accessibility/reading-ruler/{doc_id}/extract")
+async def reading_ruler_extract(doc_id: str, payload: dict):
+    input_path = _document_store.get(doc_id)
+    if not input_path: raise HTTPException(status_code=404, detail="Document not found")
+    return accessibility_service.reading_ruler_extract(input_path, payload)
+
+@router.post("/accessibility/reading-ruler/{doc_id}/export")
+async def reading_ruler_export(doc_id: str, payload: dict):
+    input_path = _document_store.get(doc_id)
+    if not input_path: raise HTTPException(status_code=404, detail="Document not found")
+    return accessibility_service.reading_ruler_export(input_path, payload)
+
+@router.post("/accessibility/voice-navigation/process-command")
+async def voice_navigation_process(payload: dict):
+    return accessibility_service.voice_navigation_process("", payload.get("command", ""))
+
+@router.post("/accessibility/text-reflow")
+async def text_reflow_post(file: UploadFile = File(...)):
     input_path = await _save_upload(file)
     try:
-        result = accessibility_service.detect_language(input_path)
-        return result
-    except Exception as e:
-        logger.exception("language_detection failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        return accessibility_service.text_reflow(input_path)
     finally:
         if os.path.exists(input_path):
             os.unlink(input_path)
+
+@router.get("/accessibility/text-reflow/{doc_id}/content")
+async def text_reflow_content_get(doc_id: str, font_size_px: str = "16", font_family: str = "Inter", theme: str = "light"):
+    input_path = _document_store.get(doc_id)
+    if not input_path: raise HTTPException(status_code=404, detail="Document not found")
+    return accessibility_service.text_reflow_content(input_path, font_size_px, font_family, theme)
+
+@router.post("/accessibility/text-reflow/{doc_id}/export")
+async def text_reflow_export_post(doc_id: str, payload: dict):
+    input_path = _document_store.get(doc_id)
+    if not input_path: raise HTTPException(status_code=404, detail="Document not found")
+    
+    new_pdf_path = accessibility_service.text_reflow_export(input_path, payload)
+    
+    import uuid
+    new_doc_id = f"reflow_{uuid.uuid4().hex[:8]}.pdf"
+    _document_store[new_doc_id] = new_pdf_path
+    
+    return {"success": True, "download_url": f"/api/accessibility/{new_doc_id}/download"}
+
+@router.post("/accessibility/keyboard-shortcuts/save")
+async def keyboard_shortcuts_save(payload: dict):
+    return accessibility_service.keyboard_shortcuts_save(payload)
+

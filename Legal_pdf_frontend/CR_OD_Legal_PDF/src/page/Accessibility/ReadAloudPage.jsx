@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BackgroundWatermark } from '../../components/crodlegalpdf';
 import {  ArrowLeft, CloudUpload, Play, Pause, Square, SkipBack, SkipForward , SlidersHorizontal } from 'lucide-react';
 
-const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '') + '/api/accessibility';
+const API_BASE = (import.meta.env.VITE_API_URL || '') + '/api/accessibility';
 
 const workflowSteps = [
   'Open PDF',
@@ -55,32 +55,68 @@ export default function ReadAloudPage({ onBack }) {
   const isPlayingRef = useRef(false);
 
   const currentStep = !documentId ? 1 : !manifest ? 2 : 3;
+  const postPdf = useCallback(async function (endpoint, file) {
+    if (!file) return null;
+    var formData = new FormData();
+    formData.append('file', file);
+    var res = await fetch(API_BASE + endpoint, { method: 'POST', body: formData });
+
+    if (!res.ok) {
+      var message = 'Request failed (' + res.status + ')';
+      try {
+        var errData = await res.json();
+        message = errData.detail || errData.error || errData.message || message;
+      } catch (parseError) {
+        console.error(parseError);
+        try {
+          var text = await res.text();
+          if (text) message = text;
+        } catch (textError) {
+          console.error(textError);
+        }
+      }
+      throw new Error(message);
+    }
+
+    return res.json();
+  }, []);
 
   const fetchManifest = useCallback(async function () {
-    if (!documentId) return;
+    if (!pdfFile) return;
     try {
-      const params = new URLSearchParams({
-        speech_rate: String(speed),
+      var data = await postPdf('/read-aloud', pdfFile);
+      var readAloud = data && data.read_aloud ? data.read_aloud : {};
+      var text = readAloud.text || '';
+      var blocks = text
+        .split(/\n+/)
+        .map(function (line) { return line.trim(); })
+        .filter(Boolean)
+        .map(function (line, index) {
+          return {
+            id: index + 1,
+            page_number: 1,
+            text: line,
+            bbox: null,
+          };
+        });
+      var words = text ? text.split(/\s+/).filter(Boolean).length : 0;
+      var generatedManifest = {
+        blocks: blocks,
+        total_words: words,
+        estimated_duration_sec: words > 0 ? Math.ceil((words / Math.max(speed, 0.1)) * 0.45) : 0,
         language: language,
-      });
-      const res = await fetch(
-        API_BASE + '/read-aloud/' + documentId + '/manifest?' + params.toString()
-      );
-      const data = await res.json();
-      if (res.ok) {
-        setManifest(data);
-        setSentences(data.blocks || []);
-        setEstimatedDuration(data.estimated_duration_sec || 0);
-        setTotalWords(data.total_words || 0);
-        setCurrentIndex(0);
-        setActiveBbox(null);
-      } else {
-        alert(data.error || 'Failed to load manifest');
-      }
+      };
+
+      setManifest(generatedManifest);
+      setSentences(blocks);
+      setEstimatedDuration(generatedManifest.estimated_duration_sec || 0);
+      setTotalWords(generatedManifest.total_words || 0);
+      setCurrentIndex(0);
+      setActiveBbox(null);
     } catch (err) {
       alert('Manifest error: ' + err.message);
     }
-  }, [documentId, speed, language]);
+  }, [pdfFile, speed, language, postPdf]);
 
   useEffect(function () {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;

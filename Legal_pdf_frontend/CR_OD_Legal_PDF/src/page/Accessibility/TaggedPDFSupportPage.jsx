@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BackgroundWatermark } from '../../components/crodlegalpdf';
 import {  ArrowLeft, CloudUpload, Download, Wand2, ChevronLeft, ChevronRight, Tag, FolderTree , SlidersHorizontal } from 'lucide-react';
 
-const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '') + '/api/accessibility';
+const API_BASE = (import.meta.env.VITE_API_URL || '') + '/api/accessibility';
 
 const workflowSteps = [
   'Open PDF',
@@ -14,6 +14,7 @@ const workflowSteps = [
 ];
 
 export default function TaggedPDFSupportPage({ onBack }) {
+  var [pdfFile, setPdfFile] = useState(null);
   var [documentId, setDocumentId] = useState(null);
   var [dragOver, setDragOver] = useState(false);
   var [fileStatus, setFileStatus] = useState('');
@@ -36,6 +37,7 @@ export default function TaggedPDFSupportPage({ onBack }) {
   var fileInputRef = useRef(null);
   var canvasRef = useRef(null);
   var pdfDocRef = useRef(null);
+  var downloadUrlRef = useRef(null);
 
   var currentStep = !documentId ? 1 : !structureTree ? 3 : !generated ? 5 : 6;
 
@@ -50,9 +52,12 @@ export default function TaggedPDFSupportPage({ onBack }) {
       var data = await res.json();
       if (res.ok) {
         setDocumentId(data.document_id);
-        setTotalPages(data.page_count || 1);
+        setPdfFile(file);
         setCurrentPage(1);
-        setFileStatus('\u2713 Loaded: ' + data.filename + ' (' + (data.page_count || 1) + ' pages)');
+        setGenerated(false);
+        setDownloadUrl('');
+        setStructureTree(null);
+        setFileStatus('\u2713 Loaded: ' + file.name + ' (' + (pdfDocRef.current ? pdfDocRef.current.numPages : 1) + ' pages)');
       } else {
         setFileStatus('\u2717 Upload error: ' + (data.error || 'Failed'));
       }
@@ -140,19 +145,30 @@ export default function TaggedPDFSupportPage({ onBack }) {
   }, [currentPage, totalPages, renderPage]);
 
   var fetchStructureTree = useCallback(async function () {
-    if (!documentId) return;
+    if (!pdfFile) return;
     setTreeLoading(true);
     try {
-      var res = await fetch(API_BASE + '/tagged-pdf/' + documentId + '/tree');
+      var formData = new FormData();
+      formData.append('file', pdfFile);
+      var res = await fetch(API_BASE + '/tagged-pdf-support', { method: 'POST', body: formData });
       if (!res.ok) throw new Error('Tree fetch failed');
       var data = await res.json();
-      setStructureTree(data.structure_tree || null);
+      var tagged = data.tagged_pdf || {};
+      setStructureTree({
+        total_tags_count: tagged.toc_entries || 0,
+        tags_tree: [
+          { tag_type: 'Tagged', page_number: 1, title: tagged.is_tagged ? 'Document contains tags' : 'Document is not tagged' },
+          { tag_type: 'StructTree', page_number: 1, title: tagged.has_structure_tree ? 'Structure tree detected' : 'No structure tree detected' },
+          { tag_type: 'MarkInfo', page_number: 1, title: tagged.has_mark_info ? 'MarkInfo present' : 'MarkInfo missing' },
+          { tag_type: 'TOC', page_number: 1, title: tagged.has_toc ? 'Bookmarks / TOC detected' : 'No bookmarks / TOC detected' },
+        ],
+      });
     } catch (err) {
       setStructureTree(null);
     } finally {
       setTreeLoading(false);
     }
-  }, [documentId]);
+  }, [pdfFile]);
 
   useEffect(function () {
     if (documentId && !structureTree) {
@@ -167,37 +183,31 @@ export default function TaggedPDFSupportPage({ onBack }) {
   }, [renderPage]);
 
   var generateTags = useCallback(async function () {
-    if (!documentId) return;
+    if (!pdfFile) return;
     setGenerating(true);
     try {
-      var payload = {
-        add_missing_tags: true,
-        auto_heading_detection: autoHeadings,
-        tag_tables: tagTables,
-        tag_figures: tagFigures,
-        mark_info_flag: markInfo,
-      };
-      var res = await fetch(API_BASE + '/tagged-pdf/' + documentId + '/generate-tags', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) throw new Error('Tag generation failed');
-      var data = await res.json();
+      await fetchStructureTree();
+      if (downloadUrlRef.current) {
+        URL.revokeObjectURL(downloadUrlRef.current);
+      }
+      var objectUrl = URL.createObjectURL(pdfFile);
       setGenerated(true);
-      setDownloadUrl(data.download_url || '');
-      if (data.tree_summary) {
-        setStructureTree(data.tree_summary);
-      }
-      if (data.preview_page_url) {
-        loadCanvasFromUrl(data.preview_page_url + '?t=' + Date.now());
-      }
+      setDownloadUrl(objectUrl);
+      downloadUrlRef.current = objectUrl;
     } catch (err) {
       alert('Tag generation error: ' + err.message);
     } finally {
       setGenerating(false);
     }
-  }, [documentId, autoHeadings, tagTables, tagFigures, markInfo, loadCanvasFromUrl]);
+  }, [pdfFile, fetchStructureTree]);
+
+  useEffect(function () {
+    return function () {
+      if (downloadUrlRef.current) {
+        URL.revokeObjectURL(downloadUrlRef.current);
+      }
+    };
+  }, []);
 
   function getTagBadgeClass(tagType) {
     if (tagType === 'H1') return 'bg-blue-100 text-blue-700';

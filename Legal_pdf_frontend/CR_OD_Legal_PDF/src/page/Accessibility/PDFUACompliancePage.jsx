@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BackgroundWatermark } from '../../components/crodlegalpdf';
 import { ArrowLeft, FolderOpen, CheckCircle, AlertTriangle, XCircle, Shield, Lightbulb } from 'lucide-react';
 
-const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '') + '/api/accessibility';
+const API_BASE = (import.meta.env.VITE_API_URL || '') + '/api/accessibility';
 
 export default function PDFUACompliancePage({ onBack }) {
   var [documentId, setDocumentId] = useState(null);
@@ -33,16 +33,17 @@ export default function PDFUACompliancePage({ onBack }) {
       var valRes = await fetch(API_BASE + '/pdf-ua/' + docId + '/validate', { method: 'POST' });
       var valData = await valRes.json();
       if (!valRes.ok) throw new Error(valData.detail || 'Validation failed');
+      var issuesList = Array.isArray(valData.issues) ? valData.issues : [];
 
       setDocumentId(docId);
-      setScore(valData.score);
-      setPassedChecks(valData.passed_checks);
-      var warns = valData.issues.filter(function (i) { return i.level === 'WARNING'; }).length;
-      var errs = valData.issues.filter(function (i) { return i.level === 'ERROR'; }).length;
+      setScore(valData.score || 0);
+      setPassedChecks(valData.passed_checks || 0);
+      var warns = issuesList.filter(function (i) { return i.level === 'WARNING'; }).length;
+      var errs = issuesList.filter(function (i) { return i.level === 'ERROR'; }).length;
       setWarningCount(warns);
       setErrorCount(errs);
-      setIssues(valData.issues || []);
-      setFilteredIssues(valData.issues || []);
+      setIssues(issuesList);
+      setFilteredIssues(issuesList);
       setValidated(true);
       setFileStatus('Validation Complete');
     } catch (err) {
@@ -66,10 +67,11 @@ export default function PDFUACompliancePage({ onBack }) {
 
   var filterIssues = useCallback(function (filter) {
     setCurrentFilter(filter);
+    var sourceIssues = Array.isArray(issues) ? issues : [];
     if (filter === 'all') {
-      setFilteredIssues(issues);
+      setFilteredIssues(sourceIssues);
     } else {
-      setFilteredIssues(issues.filter(function (i) { return i.level === filter; }));
+      setFilteredIssues(sourceIssues.filter(function (i) { return i.level === filter; }));
     }
   }, [issues]);
 

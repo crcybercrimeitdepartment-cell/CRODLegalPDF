@@ -3,6 +3,7 @@ import { Upload, FileText, Download, CheckCircle2, ArrowLeft, X, AlertCircle, Pa
 import apiClient from '../../api/apiClient';
 
 export default function FileAttachmentsPage({ onBack }) {
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8002';
   const toolName = "File Attachments";
   const toolDesc = "Manage embedded file attachments within PDF documents — view, add, download, or remove attachments.";
   
@@ -75,20 +76,9 @@ export default function FileAttachmentsPage({ onBack }) {
       const fd = new FormData();
       fd.append('file', file);
       
-      let data;
-      try {
-        const res = await fetch('/document-management/file-attachments/analyze', { method: 'POST', body: fd });
-        data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Failed');
-      } catch (err) {
-        // Mock data if fetch fails
-        data = {
-          attachments: [
-            { name: 'document1.txt', filename: 'document1.txt', extension: 'txt', size_human: '12 KB', size: 12288 },
-            { name: 'image1.png', filename: 'image1.png', extension: 'png', size_human: '1.2 MB', size: 1258291 }
-          ]
-        };
-      }
+      const res = await fetch(`${API_BASE_URL}/document-management/file-attachments/analyze`, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to analyze PDF.');
       
       await minDelay;
       
@@ -140,9 +130,19 @@ export default function FileAttachmentsPage({ onBack }) {
     
     try {
       const attData = [];
+      
+      const fileToBase64 = (file) => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64String = reader.result.split(',')[1];
+          resolve(base64String);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
       for (const f of stagedFiles) {
-        const bytes = await f.arrayBuffer();
-        const base64 = btoa(new Uint8Array(bytes).reduce((data, byte) => data + String.fromCharCode(byte), ''));
+        const base64 = await fileToBase64(f);
         attData.push({
           name: f.name,
           filename: f.name,
@@ -155,27 +155,13 @@ export default function FileAttachmentsPage({ onBack }) {
       fd.append('file', selectedPdf);
       fd.append('attachments_json', JSON.stringify(attData));
 
-      let msg = '';
-      try {
-        const res = await fetch('/document-management/file-attachments/add', { method: 'POST', body: fd });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Failed to add attachments.');
-        msg = `${data.added_count} attachment(s) added.`;
-        if (data.skipped_duplicates && data.skipped_duplicates.length > 0) {
-            msg += ' Skipped duplicates: ' + data.skipped_duplicates.join(', ');
-        }
-      } catch (err) {
-        // Mock
-        msg = `${stagedFiles.length} attachment(s) added successfully! (Mocked)`;
-        // Simulate re-analyze by appending to list
-        const newAtts = stagedFiles.map(f => ({
-          name: f.name,
-          filename: f.name,
-          extension: f.name.split('.').pop() || '',
-          size_human: formatSize(f.size),
-          size: f.size
-        }));
-        setAttachments(prev => [...prev, ...newAtts]);
+      const res = await fetch(`${API_BASE_URL}/document-management/file-attachments/add`, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to add attachments.');
+      
+      let msg = `${data.added_count} attachment(s) added.`;
+      if (data.skipped_duplicates && data.skipped_duplicates.length > 0) {
+          msg += ' Skipped duplicates: ' + data.skipped_duplicates.join(', ');
       }
       
       await minDelay;
@@ -183,6 +169,9 @@ export default function FileAttachmentsPage({ onBack }) {
       setStagedFiles([]);
       if (addInputRef.current) addInputRef.current.value = '';
       setSuccess(msg);
+      
+      // Refresh the PDF analysis to show new attachments
+      await handlePdfFile(selectedPdf);
       
     } catch (err) {
       setError('Failed to upload: ' + err.message);
@@ -200,22 +189,13 @@ export default function FileAttachmentsPage({ onBack }) {
 
     let data;
     try {
-      const res = await fetch('/document-management/file-attachments/details', { method: 'POST', body: fd });
+      const res = await fetch(`${API_BASE_URL}/document-management/file-attachments/details`, { method: 'POST', body: fd });
       data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Failed');
     } catch (err) {
-      // Mock details
-      data = {
-        name: attName,
-        filename: attName,
-        extension: attName.split('.').pop(),
-        description: 'Mock attachment description',
-        size_human: '42 KB',
-        size: 42000,
-        index: 1,
-        creation_date: '2023-01-01',
-        modification_date: '2023-01-02'
-      };
+      console.error('Failed to get details:', err);
+      setError('Failed to fetch details.');
+      return;
     }
     
     setDetailsModal({ isOpen: true, data });
@@ -229,7 +209,7 @@ export default function FileAttachmentsPage({ onBack }) {
     fd.append('attachment_name', attName);
 
     try {
-      const res = await fetch('/document-management/file-attachments/download-attachment', { method: 'POST', body: fd });
+      const res = await fetch(`${API_BASE_URL}/document-management/file-attachments/download-attachment`, { method: 'POST', body: fd });
       if (!res.ok) throw new Error('Failed to download attachment');
       
       const blob = await res.blob();
@@ -250,7 +230,7 @@ export default function FileAttachmentsPage({ onBack }) {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err) {
-      alert(`Mock download started for: ${attName}`);
+      alert(`Download failed for: ${attName}`);
     }
   };
 
@@ -266,16 +246,14 @@ export default function FileAttachmentsPage({ onBack }) {
     fd.append('attachment_name', attName);
 
     try {
-      const res = await fetch('/document-management/file-attachments/remove', { method: 'POST', body: fd });
+      const res = await fetch(`${API_BASE_URL}/document-management/file-attachments/remove`, { method: 'POST', body: fd });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Failed to remove');
+      if (!res.ok) throw new Error(data.detail || 'Failed to remove attachment.');
       
-      setAttachments(prev => prev.filter(a => a.name !== attName));
-      setSuccess(`Attachment "${attName}" removed. ${data.remaining_count} attachment(s) remaining.`);
+      setSuccess(`Attachment "${attName}" removed.`);
+      await handlePdfFile(selectedPdf);
     } catch (err) {
-      // Mock
-      setAttachments(prev => prev.filter(a => a.name !== attName));
-      setSuccess(`Attachment "${attName}" removed. (Mocked)`);
+      setError('Failed to remove: ' + err.message);
     }
   };
 
@@ -291,26 +269,15 @@ export default function FileAttachmentsPage({ onBack }) {
     try {
       const fd = new FormData();
       fd.append('file', selectedPdf);
-      fd.append('attachments_json', '[]'); // Just to trigger a save
 
-      let downloadLink = '#';
-      let msg = '';
-      
-      try {
-        const res = await fetch('/document-management/file-attachments/add', { method: 'POST', body: fd });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Failed to save PDF');
-        downloadLink = data.download_url;
-        msg = `PDF saved with ${data.total_attachments} attachment(s).`;
-      } catch (err) {
-        // Mock success if fetch fails
-        msg = 'PDF saved successfully! (Mocked)';
-      }
+      const res = await fetch(`${API_BASE_URL}/document-management/file-attachments/add`, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to save PDF.');
       
       await minDelay;
       
-      setSuccess(msg);
-      setDownloadUrl(downloadLink);
+      setSuccess('PDF saved successfully!');
+      setDownloadUrl(data.download_url);
       
     } catch (err) {
       setError('Failed to save: ' + err.message);

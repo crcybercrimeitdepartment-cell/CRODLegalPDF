@@ -230,15 +230,7 @@ class AccessibilityService:
             else:
                 detected = lang
 
-            return {
-                "success": True,
-                "primary_language_name": detected,
-                "primary_language_code": detected,
-                "metadata_language": lang,
-                "language_tags_count": 1,
-                "confidence_score": 95,
-                "detected_language": detected
-            }
+            return {"detected_language": detected, "metadata_language": lang}
         finally:
             doc.close()
 
@@ -246,21 +238,12 @@ class AccessibilityService:
 
     def get_read_aloud_text(self, input_path: str) -> Dict[str, Any]:
         """Extract text for text-to-speech reading."""
-        doc = fitz.open(input_path)
-        pages = []
-        try:
-            for page in doc:
-                pages.append(page.get_text("text"))
-        finally:
-            doc.close()
-        
-        text = "\n\n".join(pages)
+        text = self._extract_all_text(input_path)
         return {
             "success": True,
             "read_aloud": {
                 "text": text,
-                "full_text": text,
-                "pages": pages
+                "full_text": text
             }
         }
 
@@ -268,6 +251,108 @@ class AccessibilityService:
         """Store PDF and return a document ID."""
         doc_id = Path(input_path).stem + "_" + Path(input_path).suffix
         return doc_id
+
+    def wcag_scan(self, input_path: str) -> Dict[str, Any]:
+        """Run WCAG 2.1 AA compliance scan."""
+        structure = self._extract_structure(input_path)
+        images = self._extract_images(input_path)
+        full_text = self._extract_all_text(input_path)
+        headings = self._get_headings(input_path)
+        lang_info = self._detect_language(input_path)
+        links = self._extract_links(input_path)
+
+        criteria = []
+
+        has_tags = structure["is_tagged"]
+        criteria.append({
+            "criterion": "1.3.1",
+            "name": WCAG_CRITERIA["1.3.1"],
+            "status": "PASS" if has_tags else "FAIL",
+            "description": "Document structure and relationships must be programmatically determinable.",
+            "details": "PDF is tagged." if has_tags else "PDF is not tagged. Structure cannot be determined.",
+        })
+
+        has_headings = len(headings) > 0
+        criteria.append({
+            "criterion": "2.4.6",
+            "name": WCAG_CRITERIA["2.4.6"],
+            "status": "PASS" if has_headings else "WARNING",
+            "description": "Headings and labels must describe the topic or purpose.",
+            "details": f"Found {len(headings)} headings." if has_headings else "No headings found.",
+        })
+
+        has_images = len(images) > 0
+        criteria.append({
+            "criterion": "1.1.1",
+            "name": WCAG_CRITERIA["1.1.1"],
+            "status": "WARNING" if has_images else "PASS",
+            "description": "Non-text content must have text alternatives.",
+            "details": f"Found {len(images)} images. Alt text cannot be verified for PDF images." if has_images else "No images found.",
+        })
+
+        has_lang = lang_info["detected_language"] != "unknown"
+        criteria.append({
+            "criterion": "3.1.1",
+            "name": WCAG_CRITERIA["3.1.1"],
+            "status": "PASS" if has_lang else "WARNING",
+            "description": "The default human language of each page must be programmatically determinable.",
+            "details": f"Detected language: {lang_info['detected_language']}.",
+        })
+
+        word_count = len(full_text.split())
+        criteria.append({
+            "criterion": "1.3.2",
+            "name": WCAG_CRITERIA["1.3.2"],
+            "status": "PASS" if word_count > 0 else "FAIL",
+            "description": "Information and relationships must be conveyed through structure.",
+            "details": f"Document contains {word_count} words across {structure['page_count']} pages.",
+        })
+
+        has_links = len(links) > 0
+        criteria.append({
+            "criterion": "4.1.2",
+            "name": WCAG_CRITERIA["4.1.2"],
+            "status": "PASS" if not has_links else "WARNING",
+            "description": "For all user interface components, name and role must be programmatically determinable.",
+            "details": f"Found {len(links)} links. Link text should be verified." if has_links else "No links found.",
+        })
+
+        has_toc = structure.get("toc") and len(structure.get("toc", [])) > 0
+        criteria.append({
+            "criterion": "2.4.1",
+            "name": WCAG_CRITERIA["2.4.1"],
+            "status": "PASS" if has_toc else "WARNING",
+            "description": "A mechanism must be available to bypass blocks of content.",
+            "details": "Table of contents provides navigation." if has_toc else "No table of contents found.",
+        })
+
+        metadata = structure["metadata"]
+        has_title = bool(metadata.get("title"))
+        criteria.append({
+            "criterion": "2.4.2",
+            "name": WCAG_CRITERIA["2.4.2"],
+            "status": "PASS" if has_title else "FAIL",
+            "description": "Web pages must have titles that describe topic or purpose.",
+            "details": f"Title: {metadata.get('title', 'Not set')}.",
+        })
+
+        pass_count = sum(1 for c in criteria if c["status"] == "PASS")
+        total = len(criteria)
+        score = round((pass_count / total) * 100, 1) if total > 0 else 0
+
+        return {
+            "success": True,
+            "wcag_scan": {
+                "version": "WCAG 2.1",
+                "level": "AA",
+                "score": score,
+                "total_criteria": total,
+                "passed": pass_count,
+                "failed": sum(1 for c in criteria if c["status"] == "FAIL"),
+                "warnings": sum(1 for c in criteria if c["status"] == "WARNING"),
+                "criteria": criteria,
+            },
+        }
 
     def check_pdfua(self, input_path: str) -> Dict[str, Any]:
         """Check PDF/UA-1 compliance."""
@@ -390,6 +475,127 @@ class AccessibilityService:
                     "heading_count": len(headings),
                     "word_count": word_count,
                 },
+                "language": lang_info,
+            },
+        }
+
+    def get_compliance_dashboard(self, input_path: str) -> Dict[str, Any]:
+        """Get compliance dashboard with scores per category."""
+        wcag = self.wcag_scan(input_path)
+        pdfua = self.check_pdfua(input_path)
+        general = self.general_accessibility_check(input_path)
+
+        categories = {
+            "Structure & Tags": {
+                "score": 100 if general["accessibility_check"]["structure"]["is_tagged"] else 30,
+                "status": "Pass" if general["accessibility_check"]["structure"]["is_tagged"] else "Fail",
+            },
+            "Navigation": {
+                "score": 100 if general["accessibility_check"]["structure"]["heading_count"] > 0 else 40,
+                "status": "Pass" if general["accessibility_check"]["structure"]["heading_count"] > 0 else "Warning",
+            },
+            "Alt Text": {
+                "score": 60 if general["accessibility_check"]["structure"]["has_images"] else 100,
+                "status": "Warning" if general["accessibility_check"]["structure"]["has_images"] else "Pass",
+            },
+            "Language": {
+                "score": 100 if general["accessibility_check"]["language"]["detected_language"] != "unknown" else 30,
+                "status": "Pass" if general["accessibility_check"]["language"]["detected_language"] != "unknown" else "Warning",
+            },
+            "Reading Order": {
+                "score": 90 if general["accessibility_check"]["structure"]["is_tagged"] else 40,
+                "status": "Pass" if general["accessibility_check"]["structure"]["is_tagged"] else "Warning",
+            },
+        }
+
+        overall_score = round(sum(c["score"] for c in categories.values()) / len(categories), 1)
+
+        return {
+            "success": True,
+            "dashboard": {
+                "overall_score": overall_score,
+                "categories": categories,
+                "wcag_score": wcag["wcag_scan"]["score"],
+                "pdfua_compliant": pdfua["pdfua_check"]["is_compliant"],
+                "total_issues": general["accessibility_check"]["total_issues"],
+            },
+        }
+
+    def get_fix_suggestions(self, input_path: str) -> Dict[str, Any]:
+        """Suggest fixes for accessibility issues."""
+        general = self.general_accessibility_check(input_path)
+        issues = general["accessibility_check"]["issues"]
+
+        fixes = []
+        fix_map = {
+            "PDF is not tagged": {
+                "title": "Add PDF Tags",
+                "description": "Use a PDF editor to add structural tags to the document.",
+                "priority": "high",
+                "wcag_criteria": ["1.3.1"],
+            },
+            "No headings found": {
+                "title": "Add Document Headings",
+                "description": "Mark title and section headings with proper heading tags (H1-H6).",
+                "priority": "high",
+                "wcag_criteria": ["2.4.6"],
+            },
+            "No bookmarks or table of contents": {
+                "title": "Add Bookmarks",
+                "description": "Create bookmarks for each major section of the document.",
+                "priority": "medium",
+                "wcag_criteria": ["2.4.1"],
+            },
+            "Document language not detected": {
+                "title": "Set Document Language",
+                "description": "Set the document language property in PDF metadata.",
+                "priority": "medium",
+                "wcag_criteria": ["3.1.1"],
+            },
+        }
+
+        for issue in issues:
+            msg = issue["message"]
+            for key, fix in fix_map.items():
+                if key.lower() in msg.lower():
+                    fixes.append(fix)
+                    break
+
+        return {
+            "success": True,
+            "fix_suggestions": {
+                "total_suggestions": len(fixes),
+                "fixes": fixes,
+            },
+        }
+
+    def export_report(self, input_path: str) -> Dict[str, Any]:
+        """Generate accessibility report data."""
+        wcag = self.wcag_scan(input_path)
+        pdfua = self.check_pdfua(input_path)
+        general = self.general_accessibility_check(input_path)
+        structure = self._extract_structure(input_path)
+        lang_info = self._detect_language(input_path)
+
+        return {
+            "success": True,
+            "report": {
+                "title": f"Accessibility Report - {Path(input_path).name}",
+                "generated_at": __import__("datetime").datetime.now().isoformat(),
+                "document": {
+                    "file_name": Path(input_path).name,
+                    "page_count": structure["page_count"],
+                    "metadata": structure["metadata"],
+                },
+                "summary": {
+                    "wcag_score": wcag["wcag_scan"]["score"],
+                    "pdfua_compliant": pdfua["pdfua_check"]["is_compliant"],
+                    "overall_score": general["accessibility_check"]["score"],
+                    "total_issues": general["accessibility_check"]["total_issues"],
+                },
+                "wcag_details": wcag["wcag_scan"],
+                "pdfua_details": pdfua["pdfua_check"],
+                "general_details": general["accessibility_check"],
                 "language": lang_info,
             },
         }
@@ -548,6 +754,35 @@ class AccessibilityService:
         finally:
             doc.close()
 
+    def validate_heading_structure(self, input_path: str) -> Dict[str, Any]:
+        """Validate heading hierarchy (H1-H6)."""
+        headings = self._get_headings(input_path)
+
+        issues = []
+        prev_level = 0
+        for h in headings:
+            text = h["text"]
+            if len(text) < 3:
+                issues.append({"heading": text, "issue": "Heading text too short"})
+            if len(text) > 200:
+                issues.append({"heading": text[:50] + "...", "issue": "Heading text too long"})
+
+        font_sizes = [h["font_size"] for h in headings]
+        if font_sizes:
+            unique_sizes = sorted(set(font_sizes), reverse=True)
+            if len(unique_sizes) > 6:
+                issues.append({"issue": f"{len(unique_sizes)} different font sizes in headings. Consider using fewer levels."})
+
+        return {
+            "success": True,
+            "heading_structure": {
+                "total_headings": len(headings),
+                "issues": issues,
+                "is_valid": len(issues) == 0,
+                "headings": [{"level": h.get("level", "unknown"), "text": h["text"][:80], "page": h["page"]} for h in headings[:30]],
+            },
+        }
+
     def check_alt_text(self, input_path: str) -> Dict[str, Any]:
         """Check images for alt text."""
         images = self._extract_images(input_path)
@@ -665,105 +900,63 @@ class AccessibilityService:
         }
 
 
-    def letter_spacing_extract(self, input_path: str, settings: dict) -> Dict[str, Any]:
-        text = self._extract_all_text(input_path)
-        return {"success": True, "formatted_html": text, "formatted_pages": [], "total_words_count": len(text.split()), "reading_time_minutes": 1}
-
-    def letter_spacing_export(self, input_path: str, payload: dict) -> Dict[str, Any]:
-        return {"success": True, "download_url": "/api/v1/accessibility/download/dummy.pdf"}
-
-    def line_spacing_extract(self, input_path: str, settings: dict) -> Dict[str, Any]:
-        text = self._extract_all_text(input_path)
-        return {"success": True, "formatted_html": text, "formatted_pages": [], "total_words_count": len(text.split()), "reading_time_minutes": 1}
-
-    def line_spacing_export(self, input_path: str, payload: dict) -> Dict[str, Any]:
-        return {"success": True, "download_url": "/api/v1/accessibility/download/dummy.pdf"}
-
-    def font_size_controls_extract(self, input_path: str, settings: dict) -> Dict[str, Any]:
-        text = self._extract_all_text(input_path)
-        return {"success": True, "formatted_html": text, "formatted_pages": [], "total_words_count": len(text.split()), "reading_time_minutes": 1}
-
-    def font_size_controls_export(self, input_path: str, payload: dict) -> Dict[str, Any]:
-        return {"success": True, "download_url": "/api/v1/accessibility/download/dummy.pdf"}
-
-    def dyslexia_mode_extract(self, input_path: str, settings: dict) -> Dict[str, Any]:
-        text = self._extract_all_text(input_path)
-        return {"success": True, "formatted_html": text, "formatted_pages": [], "total_words_count": len(text.split()), "reading_time_minutes": 1}
-
-    def focus_mode_extract(self, input_path: str, settings: dict) -> Dict[str, Any]:
-        text = self._extract_all_text(input_path)
-        return {"success": True, "formatted_html": text, "formatted_pages": [], "total_words_count": len(text.split()), "reading_time_minutes": 1}
-
-    def focus_mode_export(self, input_path: str, payload: dict) -> Dict[str, Any]:
-        return {"success": True, "download_url": "/api/v1/accessibility/download/dummy.pdf"}
-
-    def reading_ruler_extract(self, input_path: str, settings: dict) -> Dict[str, Any]:
-        text = self._extract_all_text(input_path)
-        return {"success": True, "formatted_html": text, "formatted_pages": [], "total_words_count": len(text.split()), "reading_time_minutes": 1}
-
-    def reading_ruler_export(self, input_path: str, payload: dict) -> Dict[str, Any]:
-        return {"success": True, "download_url": "/api/v1/accessibility/download/dummy.pdf"}
-
-    def voice_navigation_process(self, input_path: str, command: str) -> Dict[str, Any]:
-        return {"success": True, "action": {"type": "scroll", "direction": "down"}}
-
-    def text_reflow(self, input_path: str) -> Dict[str, Any]:
-        text = self._extract_all_text(input_path)
-        return {"success": True, "formatted_html": text}
-
-    def text_reflow_content(self, input_path: str, font_size_px: str = "16", font_family: str = "Inter", theme: str = "light") -> Dict[str, Any]:
-        import fitz
-        doc = fitz.open(input_path)
-        pages = []
-        try:
-            for page in doc:
-                text = page.get_text("text")
-                blocks = [t.strip() for t in text.split('\n') if t.strip()]
-                html = "".join([f"<p style='margin: 0 0 1em 0;'>{t}</p>" for t in blocks])
-                if not html: html = "<p></p>"
-                pages.append(html)
-        finally:
-            doc.close()
-        return {"success": True, "full_reflow_html": "".join(pages), "pages": pages}
-
-    def text_reflow_export(self, input_path: str, payload: dict) -> str:
-        data = self.text_reflow_content(input_path)
-        html_content = data.get("full_reflow_html", "")
-        
-        settings = payload.get("settings", {})
-        font_size = settings.get("font_size_px", "16")
-        font_family = settings.get("font_family", "Inter")
-        
-        styled_html = f'''
-        <html>
-        <head>
-            <style>
-                @page {{ size: a4; margin: 2cm; }}
-                body {{
-                    font-family: "{font_family}", sans-serif;
-                    font-size: {font_size}px;
-                    line-height: 1.5;
-                }}
-            </style>
-        </head>
-        <body>
-            {html_content}
-        </body>
-        </html>
-        '''
-        
-        import tempfile
-        from xhtml2pdf import pisa
-        
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf", dir=tempfile.gettempdir())
-        tmp.close()
-        
-        with open(tmp.name, "w+b") as result_file:
-            pisa.CreatePDF(styled_html, dest=result_file)
+    def get_skip_navigation_targets(self, input_path: str) -> Dict[str, Any]:
+        """Detect potential skip navigation targets (landmarks, main content)."""
+        headings = self._get_headings(input_path)
+        targets = []
+        if headings:
+            main_heading = headings[0]
+            targets.append({
+                "title": main_heading["text"],
+                "page_number": main_heading["page"],
+                "target_type": "main_content",
+            })
+            # Add up to 4 more headings as landmarks
+            for h in headings[1:5]:
+                targets.append({
+                    "title": h["text"],
+                    "page_number": h["page"],
+                    "target_type": "landmark",
+                })
+        else:
+            # Fallback
+            targets.append({
+                "title": "Main Content",
+                "page_number": 1,
+                "target_type": "main_content",
+            })
             
-        return tmp.name
+        return {
+            "success": True,
+            "skip_targets_count": len(targets),
+            "targets": targets,
+            "message": "Detected using layout heuristics" if not headings else "Detected using headings"
+        }
 
-    def keyboard_shortcuts_save(self, shortcuts: dict) -> Dict[str, Any]:
-        return {"success": True, "message": "Saved"}
+    def inject_skip_navigation(self, input_path: str, inject_main_content_link: bool = True, inject_heading_bookmarks: bool = True) -> Dict[str, Any]:
+        """Inject skip navigation links into the PDF."""
+        try:
+            doc = fitz.open(input_path)
+            
+            if inject_heading_bookmarks:
+                toc = doc.get_toc()
+                # Remove existing skip to main content if it exists
+                toc = [t for t in toc if "Skip to Main Content" not in t[1]]
+                toc.insert(0, [1, "Skip to Main Content", 1])
+                doc.set_toc(toc)
+                
+            if inject_main_content_link and len(doc) > 0:
+                page = doc[0]
+                # Add an invisible link at the top (x0, y0, x1, y1)
+                rect = fitz.Rect(0, 0, 100, 20)
+                link = {"kind": fitz.LINK_GOTO, "page": 0, "to": fitz.Point(0, 100), "from_rect": rect}
+                page.insert_link(link)
+                
+            doc.saveIncr()
+            doc.close()
+            return {"success": True, "message": "Skip navigation injected successfully."}
+        except Exception as e:
+            logger.exception("inject_skip_navigation error")
+            return {"success": False, "error": str(e)}
 
 accessibility_service = AccessibilityService()

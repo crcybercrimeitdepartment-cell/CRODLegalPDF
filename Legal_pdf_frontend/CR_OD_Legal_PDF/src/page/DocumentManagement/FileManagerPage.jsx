@@ -33,7 +33,7 @@ export default function FileManagerPage({ onBack }) {
 
   const fetchDirectories = async () => {
     try {
-      const res = await fetch('/document-management/file-manager/directories');
+      const res = await fetch('/api/document-management/file-manager/directories');
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
@@ -49,7 +49,7 @@ export default function FileManagerPage({ onBack }) {
     setIsProcessing(true);
     setLoadingText('Loading folder contents...');
     try {
-      const res = await fetch(`/document-management/file-manager/list?path=${encodeURIComponent(path)}`);
+      const res = await fetch(`/api/document-management/file-manager/list?path=${encodeURIComponent(path)}`);
       if (!res.ok) throw new Error('Failed to load directory');
       const data = await res.json();
       setCurrentPath(path);
@@ -181,7 +181,7 @@ export default function FileManagerPage({ onBack }) {
     setIsProcessing(true);
     setLoadingText('Renaming item...');
     try {
-      const res = await fetch('/document-management/file-manager/rename', {
+      const res = await fetch('/api/document-management/file-manager/rename', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: item.path, new_name: cleanName })
@@ -205,7 +205,7 @@ export default function FileManagerPage({ onBack }) {
     setIsProcessing(true);
     setLoadingText(`${action === 'move' ? 'Moving' : 'Copying'} item...`);
     try {
-      const endpoint = action === 'move' ? '/document-management/file-manager/move' : '/document-management/file-manager/copy';
+      const endpoint = action === 'move' ? '/api/document-management/file-manager/move' : '/api/document-management/file-manager/copy';
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -229,7 +229,7 @@ export default function FileManagerPage({ onBack }) {
     setIsProcessing(true);
     setLoadingText('Deleting item...');
     try {
-      const res = await fetch('/document-management/file-manager/delete', {
+      const res = await fetch('/api/document-management/file-manager/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: item.path })

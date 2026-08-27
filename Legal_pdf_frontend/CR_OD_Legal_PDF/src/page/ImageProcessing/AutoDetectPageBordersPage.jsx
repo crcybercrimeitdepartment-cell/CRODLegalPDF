@@ -67,7 +67,9 @@ const AutoDetectPageBorders = ({ tool, onBack }) => {
     });
   };
 
-  // --- 2. DETECTION (Simulated) ---
+  const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
+  // --- 2. DETECTION ---
   const detectBorders = async () => {
     if (!activeItem) return;
     lockUI("Detecting page borders...");
@@ -76,30 +78,54 @@ const AutoDetectPageBorders = ({ tool, onBack }) => {
     setItems(prev => prev.map(i => i.id === activeId ? { ...i, status: 'detecting' } : i));
 
     try {
-      await new Promise(r => setTimeout(r, 1500)); // Simulate API delay
-      
-      // Simulate detection corners (inset 10% from edges)
-      const simulatedCorners = [
-        { x: 0.1, y: 0.1 }, // Top Left
-        { x: 0.9, y: 0.15 }, // Top Right
-        { x: 0.85, y: 0.9 }, // Bottom Right
-        { x: 0.15, y: 0.85 }  // Bottom Left
-      ];
+      const formData = new FormData();
+      formData.append("file", activeItem.file);
+
+      const res = await fetch(`${API_BASE_URL}/api/v1/images/page-borders/detect`, {
+        method: "POST",
+        body: formData
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Detection failed");
+
+      // Normalize corners from absolute pixels to relative (0 to 1) percentages
+      let normalizedCorners;
+      if (data.corners && data.original_width && data.original_height) {
+        normalizedCorners = data.corners.map(c => ({
+          x: c.x / data.original_width,
+          y: c.y / data.original_height
+        }));
+      } else {
+        normalizedCorners = [
+          { x: 0.1, y: 0.1 }, 
+          { x: 0.9, y: 0.1 }, 
+          { x: 0.9, y: 0.9 }, 
+          { x: 0.1, y: 0.9 }
+        ];
+      }
 
       setItems(prev => prev.map(i => {
         if (i.id === activeId) {
-          return { ...i, status: 'detected', corners: simulatedCorners };
+          return { 
+            ...i, 
+            status: data.detection_status, 
+            corners: normalizedCorners,
+            job_id: data.job_id,
+            originalWidth: data.original_width,
+            originalHeight: data.original_height
+          };
         }
         return i;
       }));
     } catch(err) {
+      console.error(err);
       setItems(prev => prev.map(i => i.id === activeId ? { ...i, status: 'failed' } : i));
     }
     
     unlockUI();
   };
 
-  // --- 3. APPLY CROP (Simulated) ---
+  // --- 3. APPLY CROP ---
   const applyCrop = async () => {
     if (!activeItem || activeItem.corners.length !== 4) return;
     lockUI("Applying perspective crop...");
@@ -107,20 +133,35 @@ const AutoDetectPageBorders = ({ tool, onBack }) => {
     setItems(prev => prev.map(i => i.id === activeId ? { ...i, status: 'processing' } : i));
 
     try {
-      await new Promise(r => setTimeout(r, 1200)); // Simulate API delay
-      
+      const absoluteCorners = activeItem.corners.map(c => ({
+        x: c.x * activeItem.originalWidth,
+        y: c.y * activeItem.originalHeight
+      }));
+
+      const res = await fetch(`${API_BASE_URL}/api/v1/images/page-borders/apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job_id: activeItem.job_id,
+          adjusted_corners: absoluteCorners
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Crop failed");
+
       setItems(prev => prev.map(i => {
         if (i.id === activeId) {
           return { 
             ...i, 
             status: 'completed',
-            applyData: { previewUrl: i.localUrl }, // For simulation, just show the original, but CSS will adjust it
+            applyData: { previewUrl: `${API_BASE_URL}${data.preview_url}` },
             showCropped: true
           };
         }
         return i;
       }));
     } catch(err) {
+      console.error(err);
       setItems(prev => prev.map(i => i.id === activeId ? { ...i, status: 'failed' } : i));
     }
     
@@ -149,7 +190,7 @@ const AutoDetectPageBorders = ({ tool, onBack }) => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Only draw if we have corners and not showing the final cropped result
-    if (activeItem.corners.length === 4 && (activeItem.status === 'detected' || activeItem.status === 'detecting' || (activeItem.status === 'completed' && !activeItem.showCropped))) {
+    if (activeItem.corners.length === 4 && (activeItem.status === 'detected' || activeItem.status === 'low_confidence' || activeItem.status === 'detecting' || (activeItem.status === 'completed' && !activeItem.showCropped))) {
       
       // Convert % coordinates to actual pixel coordinates on canvas
       const pxCorners = activeItem.corners.map(c => ({
@@ -207,7 +248,7 @@ const AutoDetectPageBorders = ({ tool, onBack }) => {
   };
 
   const handlePointerDown = (e) => {
-    if (!activeItem || activeItem.status !== 'detected' || activeItem.corners.length !== 4) return;
+    if (!activeItem || (activeItem.status !== 'detected' && activeItem.status !== 'low_confidence') || activeItem.corners.length !== 4) return;
     const pos = getMousePos(e);
     const canvas = canvasRef.current;
     
@@ -242,7 +283,7 @@ const AutoDetectPageBorders = ({ tool, onBack }) => {
         }
         return i;
       }));
-    } else if (activeItem && activeItem.status === 'detected') {
+    } else if (activeItem && (activeItem.status === 'detected' || activeItem.status === 'low_confidence')) {
       const pos = getMousePos(e);
       const canvas = canvasRef.current;
       const pxCorners = activeItem.corners.map(c => ({
@@ -285,8 +326,34 @@ const AutoDetectPageBorders = ({ tool, onBack }) => {
     document.body.removeChild(a);
   };
 
-  const downloadAllZip = () => {
-    alert("Simulated ZIP generation for processed files.");
+  const downloadAllZip = async () => {
+    const completedItems = items.filter(i => i.status === 'completed' && i.job_id);
+    if (completedItems.length === 0) return alert("No cropped images to download.");
+    
+    lockUI("Generating ZIP file...");
+    try {
+      const jobs = completedItems.map(i => ({
+        job_id: i.job_id,
+        adjusted_corners: i.corners.map(c => ({
+          x: c.x * i.originalWidth,
+          y: c.y * i.originalHeight
+        }))
+      }));
+
+      const res = await fetch(`${API_BASE_URL}/api/v1/images/page-borders/batch-apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobs })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.download_url) throw new Error(data.detail || "Batch process failed");
+      
+      downloadFile(`${API_BASE_URL}${data.download_url}`, "cropped_pages.zip");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to generate ZIP file.");
+    }
+    unlockUI();
   };
 
   // Stats
@@ -326,7 +393,11 @@ const AutoDetectPageBorders = ({ tool, onBack }) => {
                   `}
                 >
                   <div className="w-12 h-12 rounded overflow-hidden bg-slate-100 shrink-0 border border-slate-200">
-                    <img src={item.localUrl} className="w-full h-full object-cover" alt="thumb" />
+                    <img 
+                      src={(item.status === 'completed' && item.showCropped && item.applyData?.previewUrl) ? item.applyData.previewUrl : item.localUrl} 
+                      className="w-full h-full object-cover" 
+                      alt="thumb" 
+                    />
                   </div>
                   <div className="flex-1 min-w-0 flex flex-col">
                     <span className="text-xs font-semibold text-slate-700 truncate">{item.file.name}</span>
@@ -395,9 +466,9 @@ const AutoDetectPageBorders = ({ tool, onBack }) => {
                 <div className="relative inline-flex items-center justify-center max-w-full max-h-full">
                   <img 
                     ref={imageRef}
-                    src={activeItem.localUrl} 
+                    src={(activeItem.status === 'completed' && activeItem.showCropped && activeItem.applyData?.previewUrl) ? activeItem.applyData.previewUrl : activeItem.localUrl} 
                     alt="Active" 
-                    className={`max-w-full max-h-[70vh] object-contain pointer-events-none transition-transform duration-500 ${activeItem.status === 'completed' && activeItem.showCropped ? 'scale-110 shadow-[0_0_30px_rgba(56,189,248,0.2)]' : 'shadow-2xl'}`} // CSS scale to simulate crop zoom feeling
+                    className={`max-w-full max-h-[70vh] object-contain pointer-events-none transition-transform duration-500 ${activeItem.status === 'completed' && activeItem.showCropped ? 'shadow-[0_0_30px_rgba(56,189,248,0.2)]' : 'shadow-2xl'}`}
                     onLoad={drawCanvas}
                   />
                   
@@ -406,7 +477,7 @@ const AutoDetectPageBorders = ({ tool, onBack }) => {
                     ref={canvasRef}
                     className="absolute inset-0 z-10 touch-none"
                     style={{ 
-                      pointerEvents: (activeItem.status === 'detected' && !isProcessing) ? 'auto' : 'none',
+                      pointerEvents: ((activeItem.status === 'detected' || activeItem.status === 'low_confidence') && !isProcessing) ? 'auto' : 'none',
                       opacity: (activeItem.status === 'completed' && activeItem.showCropped) ? 0 : 1,
                       transition: 'opacity 0.3s'
                     }}
@@ -437,7 +508,7 @@ const AutoDetectPageBorders = ({ tool, onBack }) => {
                   <span className="text-xs text-slate-500 font-medium hidden sm:block">
                     {activeItem.status === 'waiting' && "Click 'Detect Borders' to begin."}
                     {activeItem.status === 'detecting' && "Finding document boundaries..."}
-                    {(activeItem.status === 'detected' || activeItem.status === 'processing') && "Adjust corners by dragging nodes if needed, then Apply."}
+                    {(activeItem.status === 'detected' || activeItem.status === 'low_confidence' || activeItem.status === 'processing') && "Adjust corners by dragging nodes if needed, then Apply."}
                     {activeItem.status === 'completed' && "Perspective crop applied successfully."}
                     {activeItem.status === 'failed' && "Processing failed. Try again."}
                   </span>
@@ -470,12 +541,12 @@ const AutoDetectPageBorders = ({ tool, onBack }) => {
                         disabled={isProcessing}
                         className="px-4 py-2 bg-sky-500 hover:bg-sky-400 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
                       >
-                        <Crop className="w-3.5 h-3.5" /> {activeItem.status === 'detected' ? 'Retake Detect' : 'Detect Borders'}
+                        <Crop className="w-3.5 h-3.5" /> {(activeItem.status === 'detected' || activeItem.status === 'low_confidence') ? 'Retake Detect' : 'Detect Borders'}
                       </button>
 
                       <button 
                         onClick={applyCrop}
-                        disabled={isProcessing || activeItem.status !== 'detected'}
+                        disabled={isProcessing || (activeItem.status !== 'detected' && activeItem.status !== 'low_confidence')}
                         className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:bg-slate-700 disabled:text-slate-400"
                       >
                         <CheckCircle2 className="w-3.5 h-3.5" /> Apply Crop
@@ -501,13 +572,14 @@ const StatusBadge = ({ status }) => {
     waiting: 'bg-slate-500/20 text-slate-400 border-slate-500/30',
     detecting: 'bg-sky-500/20 text-sky-400 border-sky-500/30 animate-pulse',
     detected: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+    low_confidence: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
     processing: 'bg-sky-500/20 text-sky-400 border-sky-500/30 animate-pulse',
     completed: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
     failed: 'bg-red-500/20 text-red-400 border-red-500/30'
   };
 
   const labels = {
-    waiting: 'Waiting', detecting: 'Detecting', detected: 'Detected', processing: 'Processing', completed: 'Completed', failed: 'Error'
+    waiting: 'Waiting', detecting: 'Detecting', detected: 'Detected', low_confidence: 'Please Check', processing: 'Processing', completed: 'Completed', failed: 'Error'
   };
 
   return (
@@ -522,13 +594,14 @@ const ActiveStatusBadge = ({ status }) => {
     waiting: 'bg-slate-500/20 text-slate-400 border-slate-500/30',
     detecting: 'bg-sky-500/20 text-sky-400 border-sky-500/30 animate-pulse',
     detected: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+    low_confidence: 'bg-orange-500/20 text-orange-500 border-orange-500/30',
     processing: 'bg-sky-500/20 text-sky-400 border-sky-500/30 animate-pulse',
     completed: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
     failed: 'bg-red-500/20 text-red-400 border-red-500/30'
   };
 
   const labels = {
-    waiting: 'Waiting', detecting: 'Detecting...', detected: 'Detected', processing: 'Processing...', completed: 'Completed', failed: 'Failed'
+    waiting: 'Waiting', detecting: 'Detecting...', detected: 'Detected', low_confidence: 'Low Confidence', processing: 'Processing...', completed: 'Completed', failed: 'Failed'
   };
 
   return (

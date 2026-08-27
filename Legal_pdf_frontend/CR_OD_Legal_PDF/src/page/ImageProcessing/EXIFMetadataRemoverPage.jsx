@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import JSZip from 'jszip';
 import { 
   UploadCloud, X, ArrowLeft, Image as ImageIcon,
   CheckCircle2, Download, FileArchive, RefreshCw, Shield,
@@ -134,9 +135,29 @@ const EXIFMetadataRemover = ({ tool, onBack }) => {
     unlockUI();
   };
 
-  // --- Helpers ---
   const lockUI = (msg) => { setIsProcessing(true); setProcessingText(msg); };
   const unlockUI = () => setIsProcessing(false);
+
+  const downloadZip = async () => {
+    const completedItems = items.filter(i => i.status === 'completed' && i.applyData?.previewUrl);
+    if (completedItems.length === 0) return alert("No cleaned images to download.");
+    
+    lockUI("Generating ZIP file...");
+    try {
+      const zip = new JSZip();
+      for (const item of completedItems) {
+        const response = await fetch(item.applyData.previewUrl);
+        const blob = await response.blob();
+        zip.file(`cleaned_${item.file.name}`, blob);
+      }
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      downloadFile(URL.createObjectURL(zipBlob), "cleaned_images.zip");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to generate ZIP file.");
+    }
+    unlockUI();
+  };
 
   const downloadFile = (url, name) => {
     const a = document.createElement('a');
@@ -273,7 +294,7 @@ const EXIFMetadataRemover = ({ tool, onBack }) => {
                 </div>
                 {successCount > 0 && (
                   <button 
-                    onClick={() => alert("Simulated ZIP save")}
+                    onClick={downloadZip}
                     disabled={isProcessing}
                     className="w-full py-2 bg-orange-500 hover:bg-orange-400 text-white text-xs font-bold rounded-lg transition-colors shadow-md flex items-center justify-center gap-2"
                   >

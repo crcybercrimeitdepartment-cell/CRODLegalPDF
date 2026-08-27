@@ -231,6 +231,8 @@ class BatchWatermarkService:
         opacity: float,
         rotation: float,
         position: str,
+        custom_x_ratio: Optional[float],
+        custom_y_ratio: Optional[float],
         scale: float,
         margin: float,
     ) -> None:
@@ -239,7 +241,11 @@ class BatchWatermarkService:
         th = font_size * scale
         w_width, w_height = tw, th
 
-        x, y = self._get_preset_position(position, page_rect.width, page_rect.height, w_width, w_height, margin)
+        if position == "Custom" and custom_x_ratio is not None and custom_y_ratio is not None:
+            x = page_rect.width * custom_x_ratio
+            y = page_rect.height * custom_y_ratio
+        else:
+            x, y = self._get_preset_position(position, page_rect.width, page_rect.height, w_width, w_height, margin)
 
         point = fitz.Point(x, y + w_height * 0.8)
         center = fitz.Point(x + w_width / 2, y + w_height / 2)
@@ -261,12 +267,18 @@ class BatchWatermarkService:
         img_width: float,
         img_height: float,
         position: str,
+        custom_x_ratio: Optional[float],
+        custom_y_ratio: Optional[float],
         margin: float,
     ) -> None:
         page_rect = page.rect
         w_width, w_height = img_width, img_height
 
-        x, y = self._get_preset_position(position, page_rect.width, page_rect.height, w_width, w_height, margin)
+        if position == "Custom" and custom_x_ratio is not None and custom_y_ratio is not None:
+            x = page_rect.width * custom_x_ratio
+            y = page_rect.height * custom_y_ratio
+        else:
+            x, y = self._get_preset_position(position, page_rect.width, page_rect.height, w_width, w_height, margin)
 
         rect = fitz.Rect(x, y, x + w_width, y + w_height)
         page.insert_image(rect, stream=image_bytes, overlay=True)
@@ -285,6 +297,8 @@ class BatchWatermarkService:
         rotation: float = 0.0,
         scale: float = 1.0,
         position: str = "Center",
+        custom_x_ratio: Optional[float] = None,
+        custom_y_ratio: Optional[float] = None,
         pages_selection: str = "all",
         image_bytes: Optional[bytes] = None,
         image_scale: float = 1.0,
@@ -359,12 +373,12 @@ class BatchWatermarkService:
                 if watermark_type == "text":
                     self._apply_text_watermark(
                         page, text, font_name, font_size, color_rgb,
-                        opacity_ratio, rotation, position, scale, margin=0.0,
+                        opacity_ratio, rotation, position, custom_x_ratio, custom_y_ratio, scale, margin=0.0,
                     )
                 else:
                     self._apply_image_watermark(
                         page, processed_image_bytes, img_width, img_height,
-                        position, margin=0.0,
+                        position, custom_x_ratio, custom_y_ratio, margin=0.0,
                     )
 
             result_bytes = doc.tobytes(garbage=4, deflate=True)
@@ -391,6 +405,8 @@ class BatchWatermarkService:
         rotation: float = 0.0,
         scale: float = 1.0,
         position: str = "Center",
+        custom_x_ratio: Optional[float] = None,
+        custom_y_ratio: Optional[float] = None,
         pages_selection: str = "all",
         image_bytes: Optional[bytes] = None,
         image_scale: float = 1.0,
@@ -406,7 +422,7 @@ class BatchWatermarkService:
         if watermark_type == "image" and not image_bytes:
             raise ValueError("No watermark image provided for image watermark.")
 
-        if position not in POSITION_PRESETS:
+        if position not in POSITION_PRESETS and position != "Custom":
             position = "Center"
 
         session_dir = Paths.request_output(session_id)
@@ -448,6 +464,8 @@ class BatchWatermarkService:
                     rotation=rotation,
                     scale=scale,
                     position=position,
+                    custom_x_ratio=custom_x_ratio,
+                    custom_y_ratio=custom_y_ratio,
                     pages_selection=pages_selection,
                     image_bytes=image_bytes,
                     image_scale=image_scale,

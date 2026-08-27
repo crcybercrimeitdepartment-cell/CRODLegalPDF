@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BackgroundWatermark } from '../../components/crodlegalpdf';
 import { ArrowLeft, Upload, Download, CheckCheck, CheckCircle, AlertTriangle, XCircle, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, GripVertical, Keyboard, ArrowDown01, X } from 'lucide-react';
 
-const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '') + '/api/accessibility';
+const API_BASE = (import.meta.env.VITE_API_URL || '') + '/api/accessibility';
 
 export default function AccessibleFormsPage({ onBack }) {
   var [documentId, setDocumentId] = useState(null);
@@ -18,6 +18,7 @@ export default function AccessibleFormsPage({ onBack }) {
 
   var [showValidation, setShowValidation] = useState(false);
   var [validationResults, setValidationResults] = useState([]);
+  var [statusMessage, setStatusMessage] = useState('');
 
   var [dragOver, setDragOver] = useState(false);
 
@@ -170,8 +171,18 @@ export default function AccessibleFormsPage({ onBack }) {
       });
     });
     setFieldsData(next);
-    alert('Tab order auto-generated based on visual position.');
+    setStatusMessage('Tab order auto-generated based on visual position.');
   }, [fieldsData]);
+
+  useEffect(function () {
+    if (!statusMessage) return undefined;
+    var timer = window.setTimeout(function () {
+      setStatusMessage('');
+    }, 2800);
+    return function () {
+      window.clearTimeout(timer);
+    };
+  }, [statusMessage]);
 
   var performUpdate = useCallback(async function () {
     if (!documentId) return null;
@@ -244,6 +255,11 @@ export default function AccessibleFormsPage({ onBack }) {
 
         {/* Right Actions */}
         <div className="absolute right-0 z-10 flex items-center gap-2">
+          {statusMessage && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-sky-100 text-sky-700">
+              {statusMessage}
+            </span>
+          )}
           <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium bg-emerald-100 text-emerald-700">
             <CheckCircle className="w-3 h-3" /> {fileStatus}
           </span>

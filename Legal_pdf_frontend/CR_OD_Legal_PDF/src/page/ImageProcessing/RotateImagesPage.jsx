@@ -72,11 +72,7 @@ const RotateImages = ({ tool, onBack }) => {
     setUploadedFiles(prev => {
       const up = [...prev];
       if (up[activeIndex]) {
-        if (degrees === 0) {
-          up[activeIndex].angle = 0;
-        } else {
-          up[activeIndex].angle = (up[activeIndex].angle + degrees) % 360;
-        }
+        up[activeIndex].angle = degrees;
         up[activeIndex].processedBlob = null;
         if (up[activeIndex].processedUrl) URL.revokeObjectURL(up[activeIndex].processedUrl);
         up[activeIndex].processedUrl = null;
@@ -277,7 +273,9 @@ const RotateImages = ({ tool, onBack }) => {
                     alt="Rotate Preview" 
                     className="block max-w-full max-h-[70vh] object-contain rounded-sm"
                     style={{
-                      transform: !activeFile.processedBlob ? `rotate(${activeFile.angle}deg)` : 'none',
+                      transform: !activeFile.processedBlob 
+                        ? `rotate(${activeFile.angle}deg) scale(${(activeFile.angle === 90 || activeFile.angle === 270) ? Math.min(activeFile.origH / activeFile.origW, activeFile.origW / activeFile.origH) : 1})` 
+                        : 'none',
                       transition: 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
                     }}
                   />

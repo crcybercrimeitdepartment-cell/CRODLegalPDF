@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BackgroundWatermark } from '../../components/crodlegalpdf';
 import {  ArrowLeft, CloudUpload, Download, FileText, Smartphone, Tablet, Monitor , SlidersHorizontal } from 'lucide-react';
 
-const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '') + '/api/accessibility';
+const API_BASE = (import.meta.env.VITE_API_URL || '') + '/api/accessibility';
 
 const workflowSteps = [
   'Open PDF',
@@ -46,6 +46,8 @@ export default function TextReflowPage({ onBack }) {
   var [theme, setTheme] = useState('light');
 
   var [reflowHtml, setReflowHtml] = useState('');
+  var [pagesHtml, setPagesHtml] = useState([]);
+  var [currentPage, setCurrentPage] = useState(0);
   var [exporting, setExporting] = useState(false);
   var [exported, setExported] = useState(false);
   var [downloadUrl, setDownloadUrl] = useState('');
@@ -115,11 +117,34 @@ export default function TextReflowPage({ onBack }) {
         theme: theme,
       });
       var res = await fetch(API_BASE + '/text-reflow/' + documentId + '/content?' + params.toString());
-      if (!res.ok) throw new Error('Reflow fetch failed');
+            if (!res.ok) {
+        var errText = await res.text();
+        var errMsg = 'Reflow fetch failed (Status ' + res.status + '): ' + errText;
+        try {
+          var errJson = JSON.parse(errText);
+          errMsg = errJson.detail || errJson.error || errJson.message || errMsg;
+        } catch (e) {
+          errMsg = errText || errMsg;
+        }
+        if (errMsg === 'Document not found' || errMsg.includes('Document not found') || res.status === 404) {
+            errMsg = 'The server restarted and forgot your document. Please upload the PDF again.';
+            localStorage.removeItem('pdf_document_id');
+            setDocumentId(null);
+            setFileStatus('');
+        }
+        throw new Error(errMsg);
+      }
       var data = await res.json();
       setReflowHtml(data.full_reflow_html || '<div style="color: #64748b;">No text extracted for reflow.</div>');
+      if (data.pages && data.pages.length > 0) {
+        setPagesHtml(data.pages);
+      } else {
+        setPagesHtml([data.full_reflow_html || '<div style="color: #64748b;">No text extracted for reflow.</div>']);
+      }
+      setCurrentPage(0);
     } catch (err) {
       setReflowHtml('<div style="color: #ef4444;">Reflow error: ' + err.message + '</div>');
+      setPagesHtml(['<div style="color: #ef4444;">Reflow error: ' + err.message + '</div>']);
     }
   }, [documentId, fontSize, fontFamily, theme]);
 
@@ -147,7 +172,23 @@ export default function TextReflowPage({ onBack }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error('Export failed');
+            if (!res.ok) {
+        var errText = await res.text();
+        var errMsg = 'Export failed';
+        try {
+          var errJson = JSON.parse(errText);
+          errMsg = errJson.detail || errJson.error || errJson.message || errMsg;
+        } catch (e) {
+          errMsg = errText || errMsg;
+        }
+        if (errMsg === 'Document not found' || errMsg.includes('Document not found') || res.status === 404) {
+            errMsg = 'The server restarted and forgot your document. Please upload the PDF again.';
+            localStorage.removeItem('pdf_document_id');
+            setDocumentId(null);
+            setFileStatus('');
+        }
+        throw new Error(errMsg);
+      }
       var data = await res.json();
       setExported(true);
       setDownloadUrl(data.download_url || '');
@@ -160,7 +201,7 @@ export default function TextReflowPage({ onBack }) {
 
   var renderFixedPdf = useCallback(function () {
     if (typeof window === 'undefined' || typeof window.pdfjsLib === 'undefined' || !documentId) return;
-    window.pdfjsLib.getDocument(API_BASE + '/text-reflow/' + documentId + '/content').promise.then(function (pdf) {
+    window.pdfjsLib.getDocument(API_BASE + '/' + documentId + '/download').promise.then(function (pdf) {
       pdfDocRef.current = pdf;
       pdf.getPage(1).then(function (page) {
         var vp = page.getViewport({ scale: 1.0 });
@@ -373,24 +414,47 @@ export default function TextReflowPage({ onBack }) {
             </div>
 
             {reflowEnabled ? (
-              <div
-                className="min-h-[400px] p-5 transition-all"
-                style={{
-                  maxWidth: simulatorWidth,
-                  margin: simulatorWidth === '100%' ? '0' : '0 auto',
-                  width: '100%',
-                  backgroundColor: themeStyle.bg,
-                  color: themeStyle.color,
-                  fontFamily: fontFamily,
-                  fontSize: fontSize + 'px',
-                  lineHeight: '1.7',
-                }}
-              >
-                {reflowHtml ? (
-                  <div dangerouslySetInnerHTML={{ __html: reflowHtml }} />
-                ) : (
-                  <div className="text-center pt-10" style={{ fontSize: '13px', opacity: 0.5 }}>
-                    Upload a PDF document to view responsive, reflowed content without horizontal scrolling.
+              <div className="flex flex-col h-full relative">
+                <div
+                  className="min-h-[400px] p-5 transition-all overflow-y-auto pb-20"
+                  style={{
+                    maxWidth: simulatorWidth,
+                    margin: simulatorWidth === '100%' ? '0' : '0 auto',
+                    width: '100%',
+                    backgroundColor: themeStyle.bg,
+                    color: themeStyle.color,
+                    fontFamily: fontFamily,
+                    fontSize: fontSize + 'px',
+                    lineHeight: '1.7',
+                  }}
+                >
+                  {pagesHtml.length > 0 ? (
+                    <div dangerouslySetInnerHTML={{ __html: pagesHtml[currentPage] || '' }} />
+                  ) : (
+                    <div className="text-center pt-10" style={{ fontSize: '13px', opacity: 0.5 }}>
+                      Upload a PDF document to view responsive, reflowed content without horizontal scrolling.
+                    </div>
+                  )}
+                </div>
+                {pagesHtml.length > 1 && (
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-white/90 backdrop-blur border border-slate-200 shadow-lg px-4 py-2 rounded-full z-30">
+                    <button 
+                      onClick={function() { setCurrentPage(function(p) { return Math.max(0, p - 1); }); }}
+                      disabled={currentPage === 0}
+                      className="text-slate-600 hover:text-sky-600 font-semibold text-sm disabled:opacity-40 disabled:hover:text-slate-600 cursor-pointer"
+                    >
+                      Previous
+                    </button>
+                    <span className="text-xs font-bold text-slate-500 whitespace-nowrap">
+                      Page {currentPage + 1} of {pagesHtml.length}
+                    </span>
+                    <button 
+                      onClick={function() { setCurrentPage(function(p) { return Math.min(pagesHtml.length - 1, p + 1); }); }}
+                      disabled={currentPage === pagesHtml.length - 1}
+                      className="text-slate-600 hover:text-sky-600 font-semibold text-sm disabled:opacity-40 disabled:hover:text-slate-600 cursor-pointer"
+                    >
+                      Next
+                    </button>
                   </div>
                 )}
               </div>

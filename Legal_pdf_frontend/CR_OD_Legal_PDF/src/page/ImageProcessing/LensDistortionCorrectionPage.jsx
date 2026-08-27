@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import JSZip from 'jszip';
 import { 
   UploadCloud, X, Camera, Download, Package, ArrowLeft, Image as ImageIcon,
   Wand2, Maximize, Target, Eye, Waves, Smartphone, ZoomIn, ZoomOut, Maximize2,
@@ -15,6 +16,7 @@ const MODES = [
 ];
 
 const LensDistortionCorrection = ({ tool, onBack }) => {
+  const API_BASE_URL = import.meta.env.VITE_API_URL || '';
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -56,7 +58,8 @@ const LensDistortionCorrection = ({ tool, onBack }) => {
             status: 'waiting', // waiting, processing, completed, error
             processedBlob: null,
             processedUrl: null,
-            errorMsg: ''
+            errorMsg: '',
+            job_id: null
           };
           const updated = [...prev, newItem];
           if (prev.length === 0) setActiveIndex(0);
@@ -171,43 +174,66 @@ const LensDistortionCorrection = ({ tool, onBack }) => {
     });
     
     try {
-      // Simulate backend processing delay
-      await new Promise(r => setTimeout(r, 1200));
+      let currentJobId = activeFile.job_id;
       
-      const canvas = document.createElement('canvas');
-      const img = new Image();
-      img.src = activeFile.dataUrl;
-      await new Promise(r => img.onload = r);
-      
-      canvas.width = activeFile.origW;
-      canvas.height = activeFile.origH;
-      const ctx = canvas.getContext('2d');
-      
-      // Frontend Simulation: Just draw image and apply a slight contrast to show a change for mockup
-      ctx.drawImage(img, 0, 0);
-      if (mode !== 'auto') {
-        ctx.fillStyle = 'rgba(0,0,0,0.02)';
-        ctx.fillRect(0,0, canvas.width, canvas.height); // Fake visual difference
-      }
-      
-      canvas.toBlob((blob) => {
+      // 1. Upload if not already uploaded
+      if (!currentJobId) {
+        const formData = new FormData();
+        formData.append("file", activeFile.file);
+        
+        const uploadRes = await fetch(`${API_BASE_URL}/api/v1/images/lens-correction/upload`, {
+          method: "POST",
+          body: formData
+        });
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok) throw new Error(uploadData.detail || "Upload failed");
+        
+        currentJobId = uploadData.job_id;
+        
+        // Update job_id in state
         setUploadedFiles(prev => {
           const up = [...prev];
-          up[activeIndex].processedBlob = blob;
-          up[activeIndex].processedUrl = URL.createObjectURL(blob);
-          up[activeIndex].status = 'completed';
+          if (up[activeIndex].id === activeFile.id) {
+            up[activeIndex].job_id = currentJobId;
+          }
           return up;
         });
-        setIsProcessing(false);
-        setShowOriginal(false);
-      }, activeFile.file.type);
+      }
+
+      // 2. Apply correction
+      const applyRes = await fetch(`${API_BASE_URL}/api/v1/images/lens-correction/apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job_id: currentJobId,
+          mode: mode === 'wavy' ? 'mustache' : (mode === 'wide' ? 'wide_angle' : mode), // map modes if necessary
+          strength: strength
+        })
+      });
+      const applyData = await applyRes.json();
+      if (!applyRes.ok || !applyData.success) throw new Error(applyData.detail || "Correction failed");
+      
+      const resultPreviewUrl = `${API_BASE_URL}${applyData.preview_url}`;
+      
+      setUploadedFiles(prev => {
+        const up = [...prev];
+        if (up[activeIndex].id === activeFile.id) {
+          up[activeIndex].processedUrl = resultPreviewUrl;
+          up[activeIndex].status = 'completed';
+        }
+        return up;
+      });
+      setIsProcessing(false);
+      setShowOriginal(false);
       
     } catch(err) {
       console.error("Correction Error:", err);
       setUploadedFiles(prev => {
         const up = [...prev];
-        up[activeIndex].status = 'error';
-        up[activeIndex].errorMsg = 'Failed to correct lens distortion.';
+        if (up[activeIndex].id === activeFile.id) {
+          up[activeIndex].status = 'error';
+          up[activeIndex].errorMsg = err.message || 'Failed to correct lens distortion.';
+        }
         return up;
       });
       setIsProcessing(false);
@@ -224,19 +250,26 @@ const LensDistortionCorrection = ({ tool, onBack }) => {
   };
 
   const saveAllImages = async () => {
-    const processed = uploadedFiles.filter(f => f.processedBlob !== null && f.status === 'completed');
+    const processed = uploadedFiles.filter(f => f.processedUrl !== null && f.status === 'completed');
     if (processed.length === 0) return alert("No completed images available to save.");
     
-    if (processed.length === 1) {
-      const idx = uploadedFiles.findIndex(f => f.id === processed[0].id);
-      setActiveIndex(idx);
-      const nameWithoutExt = processed[0].name.replace(/\.[^/.]+$/, "");
-      const ext = processed[0].file.type === "image/png" ? ".png" : ".jpg";
-      setTimeout(() => downloadFile(processed[0].processedBlob, `lens_corrected_${nameWithoutExt}${ext}`), 100);
-      return;
+    setIsProcessing(true);
+    try {
+      const zip = new JSZip();
+      for (const item of processed) {
+        const response = await fetch(item.processedUrl);
+        const blob = await response.blob();
+        const nameWithoutExt = item.name.replace(/\.[^/.]+$/, "");
+        const ext = item.file.type === "image/png" ? ".png" : ".jpg";
+        zip.file(`lens_corrected_${nameWithoutExt}${ext}`, blob);
+      }
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      downloadFile(URL.createObjectURL(zipBlob), "lens_corrected_images.zip");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to generate ZIP file.");
     }
-    
-    alert("Batch ZIP saving requires the backend API which is currently simulated.");
+    setIsProcessing(false);
   };
 
   const getStatusBadge = (status) => {

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BackgroundWatermark } from '../../components/crodlegalpdf';
 import { ArrowLeft, Upload, Download, FileText, Type, ChevronLeft, ChevronRight } from 'lucide-react';
 
-const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '') + '/api/accessibility';
+const API_BASE = (import.meta.env.VITE_API_URL || '') + '/api/accessibility';
 
 var presets = [
   { spacing: 0.00, label: 'Normal (0.00em)' },
@@ -37,6 +37,8 @@ export default function AdjustableLetterSpacingPage({ onBack }) {
   var [lineHeight, setLineHeight] = useState(1.6);
 
   var [formattedHtml, setFormattedHtml] = useState('');
+  var [extractedPages, setExtractedPages] = useState([]);
+  var [currentPreviewPage, setCurrentPreviewPage] = useState(1);
   var [totalCharacters, setTotalCharacters] = useState(0);
   var [appliedSpacing, setAppliedSpacing] = useState(0.12);
 
@@ -81,7 +83,7 @@ export default function AdjustableLetterSpacingPage({ onBack }) {
       var payload = {
         letter_spacing_em: letterSpacing,
         preset_name: getPresetName(letterSpacing),
-        line_height_mult: lineHeight,
+        line_spacing_mult: lineHeight,
         text_color_hex: '#1e293b',
       };
       var res = await fetch(API_BASE + '/letter-spacing/' + documentId + '/preview', {
@@ -92,10 +94,14 @@ export default function AdjustableLetterSpacingPage({ onBack }) {
       if (!res.ok) throw new Error('Preview failed');
       var data = await res.json();
       setFormattedHtml(data.extracted_html || '');
+      setExtractedPages(Array.isArray(data.extracted_pages) ? data.extracted_pages : []);
+      setCurrentPreviewPage(1);
       setTotalCharacters(data.total_characters_count || 0);
       setAppliedSpacing(data.applied_letter_spacing || letterSpacing);
     } catch (err) {
       setFormattedHtml('<div style="color: #ef4444; padding: 20px;">Failed: ' + err.message + '</div>');
+      setExtractedPages([]);
+      setCurrentPreviewPage(1);
     }
   }, [documentId, letterSpacing, lineHeight]);
 
@@ -116,7 +122,7 @@ export default function AdjustableLetterSpacingPage({ onBack }) {
       var payload = {
         letter_spacing_em: letterSpacing,
         preset_name: getPresetName(letterSpacing),
-        line_height_mult: lineHeight,
+        line_spacing_mult: lineHeight,
         text_color_hex: '#1e293b',
       };
       var res = await fetch(API_BASE + '/letter-spacing/' + documentId + '/apply', {
@@ -134,6 +140,10 @@ export default function AdjustableLetterSpacingPage({ onBack }) {
       setApplying(false);
     }
   }, [documentId, letterSpacing, lineHeight]);
+
+  var activePreviewPage = extractedPages.length > 0
+    ? (extractedPages.find(function (page) { return page.page_number === currentPreviewPage; }) || extractedPages[0])
+    : null;
 
   return (
     <div className="flex-1 flex flex-col w-full h-[calc(100vh-64px)] relative pt-11 sm:pt-4 bg-[#F5F3EC] overflow-hidden px-4 sm:px-8 lg:px-12 pb-4 sm:pb-8 font-sans">
@@ -158,8 +168,8 @@ export default function AdjustableLetterSpacingPage({ onBack }) {
       </div>
 
       <div className="flex-1 flex flex-col lg:flex-row w-full max-w-[1920px] mx-auto mt-12 sm:mt-16 lg:mt-20 border border-slate-200 bg-white overflow-hidden rounded-xl shadow-[0_15px_50px_rgba(0,0,0,0.05)] relative z-10">
-        <div className="w-full lg:w-[340px] border-r border-slate-200 bg-slate-50 flex flex-col shrink-0 overflow-y-auto p-5 z-20">
-          <div className="flex flex-col gap-2">
+        <div className="w-full lg:w-[340px] border-r border-slate-200 bg-slate-50 flex flex-col shrink-0 overflow-y-auto p-5 z-20 gap-5">
+          <div className="flex flex-col gap-3">
             <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-file-text w-3.5 h-3.5"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg> 1. Open PDF Document
             </div>
@@ -177,7 +187,7 @@ export default function AdjustableLetterSpacingPage({ onBack }) {
             {fileStatus && <div className="text-xs font-semibold" style={{ color: fileStatus.indexOf('\u2713') >= 0 ? '#10b981' : '#ef4444' }}>{fileStatus}</div>}
           </div>
 
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-4">
             <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
               <span className="text-base">{'\u2699'}</span> 2. Letter Spacing Controls
             </div>
@@ -222,7 +232,7 @@ export default function AdjustableLetterSpacingPage({ onBack }) {
             </div>
           </div>
 
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-3">
             <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
               <FileText className="w-3.5 h-3.5" /> 3. Save & Export PDF
             </div>
@@ -242,7 +252,7 @@ export default function AdjustableLetterSpacingPage({ onBack }) {
             )}
           </div>
 
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-3">
             <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
               <span className="text-base">{'\uD83D\uDCCA'}</span> User Workflow Progress
             </div>
@@ -274,12 +284,40 @@ export default function AdjustableLetterSpacingPage({ onBack }) {
             <div className="text-[11px] text-slate-400 font-semibold">Real-time character tracking adjustment for enhanced dyslexia readability</div>
           </div>
 
-          <div className="flex-1 overflow-auto p-8 bg-slate-50">
-            <div className="max-w-[720px] mx-auto rounded-xl border border-slate-200 shadow-md p-12 bg-white">
+          <div className="flex-1 overflow-hidden p-8 bg-slate-50">
+            <div className="max-w-[720px] h-full max-h-full mx-auto rounded-xl border border-slate-200 shadow-md p-12 bg-white transition-all overflow-y-auto overflow-x-hidden">
               {!formattedHtml ? (
                 <div className="text-center text-slate-500 text-sm py-12">
                   <FileText className="w-10 h-10 text-indigo-400 mx-auto mb-3" />
                   Upload a PDF to adjust character letter spacing for dyslexia and low-vision clarity.
+                </div>
+              ) : extractedPages.length > 0 && activePreviewPage ? (
+                <div className="flex flex-col gap-6 h-full">
+                  <div className="sticky top-0 z-10 flex items-center justify-between rounded-lg border border-slate-200 bg-white/95 px-4 py-2 backdrop-blur-sm shadow-sm" style={{ fontSize: '16px' }}>
+                    <button
+                      onClick={function () { setCurrentPreviewPage(function (prev) { return Math.max(1, prev - 1); }); }}
+                      disabled={currentPreviewPage <= 1}
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700 disabled:opacity-40"
+                    >
+                      <ChevronLeft className="w-4 h-4" /> Prev
+                    </button>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Preview Page</span>
+                      <span className="rounded-full bg-slate-800 px-3 py-1 text-[11px] font-semibold text-white">
+                        Page {activePreviewPage.page_number} of {extractedPages.length}
+                      </span>
+                    </div>
+                    <button
+                      onClick={function () { setCurrentPreviewPage(function (prev) { return Math.min(extractedPages.length, prev + 1); }); }}
+                      disabled={currentPreviewPage >= extractedPages.length}
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700 disabled:opacity-40"
+                    >
+                      Next <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <section key={activePreviewPage.page_number} className="bg-transparent">
+                    <div dangerouslySetInnerHTML={{ __html: activePreviewPage.html }} style={{ color: '#1e293b' }} />
+                  </section>
                 </div>
               ) : (
                 <div dangerouslySetInnerHTML={{ __html: formattedHtml }} style={{

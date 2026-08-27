@@ -24,7 +24,13 @@ def detect_document_corners(image: np.ndarray) -> np.ndarray:
     contours = sorted(contours, key=cv2.contourArea, reverse=True)[:5]
 
     screenCnt = None
+    # Require the document to take up at least 5% of the image area
+    min_area = 0.05 * (image.shape[0] * image.shape[1])
+    
     for c in contours:
+        if cv2.contourArea(c) < min_area:
+            continue
+            
         peri = cv2.arcLength(c, True)
         approx = cv2.approxPolyDP(c, 0.02 * peri, True)
 

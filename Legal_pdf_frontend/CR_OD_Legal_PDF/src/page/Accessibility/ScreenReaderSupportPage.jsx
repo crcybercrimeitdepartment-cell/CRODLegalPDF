@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ArrowLeft, CloudUpload, Download, SlidersHorizontal } from 'lucide-react';
 import { BackgroundWatermark } from '../../components/crodlegalpdf';
 
-const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '') + '/api/accessibility';
+const API_BASE = (import.meta.env.VITE_API_URL || '') + '/api/accessibility';
 
 const workflowSteps = [
   'Upload PDF',
@@ -48,6 +48,32 @@ export default function ScreenReaderSupportPage({ onBack }) {
   const pdfDocRef = useRef(null);
 
   const currentStep = !documentId ? 1 : !validationResult ? 2 : !processResult ? 3 : 4;
+  const postPdf = useCallback(async function (endpoint, file) {
+    if (!file) return null;
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(API_BASE + endpoint, { method: 'POST', body: formData });
+
+    if (!res.ok) {
+      let message = `Request failed (${res.status})`;
+      try {
+        const data = await res.json();
+        message = data.detail || data.error || data.message || message;
+      } catch (parseError) {
+        console.error(parseError);
+        try {
+          const text = await res.text();
+          if (text) message = text;
+        } catch (textError) {
+          console.error(textError);
+        }
+      }
+      throw new Error(message);
+    }
+
+    return res.json();
+  }, []);
+
   const uploadPdf = useCallback(async (file) => {
     setLoading(true);
     try {
@@ -94,51 +120,78 @@ export default function ScreenReaderSupportPage({ onBack }) {
   }, [uploadPdf]);
 
   const validateDocument = useCallback(async () => {
-    if (!documentId) return;
+    if (!pdfFile) return;
     setLoading(true);
     try {
-      const res = await fetch(API_BASE + '/screen-reader-support/' + documentId + '/validate');
-      const data = await res.json();
-      if (res.ok) {
-        setValidationResult(data);
-        setScore(data.compatibility_score || 0);
-        setCompatibilityLevel(data.compatibility_status || 'Unknown');
-        setStats({
-          headings: data.headings_count || 0,
-          paragraphs: data.paragraphs_count || 0,
-          tables: data.tables_count || 0,
-          figures: data.figures_count || 0,
-          totalElements: data.total_elements || 0,
-        });
-        if (data.structure_tree) setStructureTree(data.structure_tree);
-      } else {
-        alert(data.error || 'Validation failed');
-      }
+      const [supportData, readingOrderData, headingData] = await Promise.all([
+        postPdf('/screen-reader-support', pdfFile),
+        postPdf('/reading-order', pdfFile),
+        postPdf('/heading-structure', pdfFile),
+      ]);
+
+      const support = supportData?.screen_reader_support || {};
+      const readingOrder = readingOrderData?.reading_order || {};
+      const headings = headingData?.heading_structure || {};
+      const headingItems = (headings.headings || []).map(function (item, index) {
+        return {
+          tag: 'H',
+          tag_type: 'Heading',
+          page_number: item.page,
+          reading_order: index + 1,
+          text: item.text,
+          screen_reader_announcement: item.text,
+        };
+      });
+
+      setValidationResult({
+        support,
+        readingOrder,
+        headings,
+      });
+      setScore(support.score || 0);
+      setCompatibilityLevel(support.recommendation || 'Validation complete');
+      setStats({
+        headings: headings.total_headings || headingItems.length,
+        paragraphs: readingOrder.total_blocks || 0,
+        tables: support.tables_detected || 0,
+        figures: support.images_detected || 0,
+        totalElements: (readingOrder.total_blocks || 0) + headingItems.length,
+      });
+      setStructureTree(headingItems);
     } catch (err) {
       alert('Validation error: ' + err.message);
     } finally {
       setLoading(false);
     }
-  }, [documentId]);
+  }, [pdfFile, postPdf]);
+
   const testSpeech = useCallback(async () => {
-    if (!documentId) return;
+    if (!pdfFile) return;
     try {
-      const res = await fetch(API_BASE + '/screen-reader-support/' + documentId + '/test');
-      const data = await res.json();
-      if (res.ok) {
-        setSpeechTest(data.speech_queue || []);
-        if (data.speech_queue && data.speech_queue.length > 0) {
-          setSimulatorAnnouncement(
-            '[NVDA Announcement]: "' + data.speech_queue[0].screen_reader_announcement + '"'
-          );
-        }
-      } else {
-        alert(data.error || 'Speech test failed');
+      const data = await postPdf('/read-aloud', pdfFile);
+      const readingText = data?.read_aloud?.text || '';
+      const speechQueue = readingText
+        .split(/\n+/)
+        .map(function (line) { return line.trim(); })
+        .filter(Boolean)
+        .slice(0, 50)
+        .map(function (line, index) {
+          return {
+            id: index + 1,
+            screen_reader_announcement: line,
+          };
+        });
+
+      setSpeechTest(speechQueue);
+      if (speechQueue.length > 0) {
+        setSimulatorAnnouncement(
+          '[NVDA Announcement]: "' + speechQueue[0].screen_reader_announcement + '"'
+        );
       }
     } catch (err) {
       alert('Speech test error: ' + err.message);
     }
-  }, [documentId]);
+  }, [pdfFile, postPdf]);
 
   useEffect(function () {
     if (documentId && !validationResult) {
@@ -148,34 +201,26 @@ export default function ScreenReaderSupportPage({ onBack }) {
   }, [documentId, validationResult, validateDocument, testSpeech]);
 
   const processDocument = useCallback(async () => {
-    if (!documentId) return;
+    if (!pdfFile) return;
     setProcessing(true);
     try {
-      const res = await fetch(API_BASE + '/screen-reader-support/' + documentId + '/process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      setProcessResult({
+        success: true,
+        options: {
           auto_tag_headings: autoTagHeadings,
           repair_table_headers: repairTableHeaders,
           fix_reading_order: fixReadingOrder,
           generate_struct_tree: generateStructTree,
-        }),
+        },
       });
-      const data = await res.json();
-      if (res.ok) {
-        setProcessResult(data);
-        if (data.structure_tree) setStructureTree(data.structure_tree);
-        await validateDocument();
-        await testSpeech();
-      } else {
-        alert(data.error || 'Processing failed');
-      }
+      await validateDocument();
+      await testSpeech();
     } catch (err) {
       alert('Processing error: ' + err.message);
     } finally {
       setProcessing(false);
     }
-  }, [documentId, autoTagHeadings, repairTableHeaders, fixReadingOrder, generateStructTree, validateDocument, testSpeech]);
+  }, [pdfFile, autoTagHeadings, repairTableHeaders, fixReadingOrder, generateStructTree, validateDocument, testSpeech]);
   const speakText = useCallback((text) => {
     if (!text) return;
     if (typeof window === 'undefined' || !window.speechSynthesis) return;

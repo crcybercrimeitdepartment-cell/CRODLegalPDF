@@ -159,42 +159,41 @@ const ImageUpscalingAISuperResolution = ({ tool, onBack }) => {
     setIsProcessing(true);
     
     try {
-      // Simulate backend processing time
-      await new Promise(r => setTimeout(r, 1200));
+      const formData = new FormData();
+      formData.append('file', activeFile.file);
       
-      const canvas = document.createElement('canvas');
-      canvas.width = targetW;
-      canvas.height = targetH;
-      const ctx = canvas.getContext('2d');
+      const stateObj = {
+        scale_factor: scaleFactor
+      };
       
-      // We simulate high quality upscaling
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
+      formData.append('state', JSON.stringify(stateObj));
       
-      const img = new Image();
-      img.src = activeFile.dataUrl;
-      await new Promise(r => img.onload = r);
+      const response = await fetch('/api/v1/images/upscale', {
+        method: 'POST',
+        body: formData
+      });
       
-      ctx.drawImage(img, 0, 0, targetW, targetH);
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || 'Image upscaling failed on the server.');
+      }
       
-      const mimeType = activeFile.file.type || 'image/png';
+      const blob = await response.blob();
       
-      canvas.toBlob((blob) => {
-        setUploadedFiles(prev => {
-          const up = [...prev];
-          up[activeIndex].processedBlob = blob;
-          up[activeIndex].processedUrl = URL.createObjectURL(blob);
-          return up;
-        });
-        
-        setSliderPosition(50);
-        setIsProcessing(false);
-      }, mimeType, 1.0);
+      setUploadedFiles(prev => {
+        const up = [...prev];
+        up[activeIndex].processedBlob = blob;
+        up[activeIndex].processedUrl = URL.createObjectURL(blob);
+        return up;
+      });
+      
+      setSliderPosition(50);
+      setIsProcessing(false);
       
     } catch(err) {
       console.error("Upscaling Error:", err);
       setIsProcessing(false);
-      alert("Failed to upscale image.");
+      alert("Failed to upscale image: " + err.message);
     }
   };
 
@@ -220,7 +219,14 @@ const ImageUpscalingAISuperResolution = ({ tool, onBack }) => {
       return;
     }
     
-    alert("Batch ZIP saving requires the backend API which is currently simulated.");
+    // Fallback: download all individually
+    processed.forEach((item, i) => {
+      setTimeout(() => {
+        const nameWithoutExt = item.name.replace(/\.[^/.]+$/, "");
+        const ext = item.file.name.substring(item.file.name.lastIndexOf("."));
+        downloadFile(item.processedBlob, `upscaled_${nameWithoutExt}${ext}`);
+      }, i * 300);
+    });
   };
 
     const resetSelection = () => {

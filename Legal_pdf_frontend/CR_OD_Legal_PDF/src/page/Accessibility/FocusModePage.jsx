@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BackgroundWatermark } from '../../components/crodlegalpdf';
-import { ArrowLeft, Upload, Download, FileText, Crosshair, Maximize2, Minimize2, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, Upload, Download, FileText, Crosshair, Maximize2, Minimize2, Eye, EyeOff, ChevronLeft, ChevronRight } from 'lucide-react';
 
-const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '') + '/api/accessibility';
+const API_BASE = (import.meta.env.VITE_API_URL || '') + '/api/accessibility';
 
 var focusStyles = [
   { value: 'Paragraph Spotlight', label: 'Paragraph Spotlight' },
@@ -41,6 +41,8 @@ export default function FocusModePage({ onBack }) {
   var [sidebarHidden, setSidebarHidden] = useState(false);
 
   var [formattedHtml, setFormattedHtml] = useState('');
+  var [formattedPages, setFormattedPages] = useState([]);
+  var [currentPreviewPage, setCurrentPreviewPage] = useState(1);
   var [totalParas, setTotalParas] = useState(0);
   var [activeParaIndex, setActiveParaIndex] = useState(0);
 
@@ -97,11 +99,15 @@ export default function FocusModePage({ onBack }) {
       });
       if (!res.ok) throw new Error('Extraction failed');
       var data = await res.json();
-      setFormattedHtml(data.extracted_html || '');
-      setTotalParas(data.total_paragraphs_count || 0);
+      setFormattedHtml(data.formatted_html || data.extracted_html || '');
+      setFormattedPages(Array.isArray(data.formatted_pages) ? data.formatted_pages : []);
+      setCurrentPreviewPage(1);
+      setTotalParas(data.blocks ? data.blocks.length : (data.total_paragraphs_count || 0));
       setActiveParaIndex(0);
     } catch (err) {
       setFormattedHtml('<div style="color: #ef4444; padding: 20px;">Failed: ' + err.message + '</div>');
+      setFormattedPages([]);
+      setCurrentPreviewPage(1);
     }
   }, [documentId, focusStyle, dimOpacity, highlightTint, minimizeInterface, keyboardNav]);
 
@@ -109,18 +115,46 @@ export default function FocusModePage({ onBack }) {
     if (documentId) fetchContent();
   }, [documentId, fetchContent]);
 
+  useEffect(function () {
+    setActiveParaIndex(0);
+  }, [currentPreviewPage]);
+
   var handleKeyDown = useCallback(function (e) {
-    if (!keyboardNav || totalParas === 0) return;
+    if (!keyboardNav) return;
+    
+    var paras = readerContentRef.current ? readerContentRef.current.querySelectorAll('p') : [];
+    var currentParasCount = paras.length;
+    
     if (e.key === 'ArrowDown' || e.key === 'j' || e.key === 'J') {
       e.preventDefault();
-      setActiveParaIndex(function (prev) { return Math.min(prev + 1, totalParas - 1); });
+      if (currentParasCount === 0) return;
+      setActiveParaIndex(function (prev) { 
+        if (prev + 1 >= currentParasCount) {
+          if (currentPreviewPage < formattedPages.length) {
+            setCurrentPreviewPage(function(c) { return c + 1; });
+            return 0;
+          }
+          return prev;
+        }
+        return prev + 1; 
+      });
     } else if (e.key === 'ArrowUp' || e.key === 'k' || e.key === 'K') {
       e.preventDefault();
-      setActiveParaIndex(function (prev) { return Math.max(prev - 1, 0); });
+      if (currentParasCount === 0) return;
+      setActiveParaIndex(function (prev) { 
+        if (prev - 1 < 0) {
+           if (currentPreviewPage > 1) {
+             setCurrentPreviewPage(function(c) { return c - 1; });
+             return 0; 
+           }
+           return 0;
+        }
+        return prev - 1; 
+      });
     } else if (e.key === 'f' || e.key === 'F') {
       setSidebarHidden(function (h) { return !h; });
     }
-  }, [keyboardNav, totalParas]);
+  }, [keyboardNav, currentPreviewPage, formattedPages.length]);
 
   useEffect(function () {
     document.addEventListener('keydown', handleKeyDown);
@@ -154,7 +188,11 @@ export default function FocusModePage({ onBack }) {
     }
   }, [documentId, focusStyle, dimOpacity, highlightTint, minimizeInterface, keyboardNav]);
 
-  var dimBackdrop = focusStyle === 'Dim Backdrop' && focusActive;
+  var activePreviewPage = formattedPages.length > 0
+    ? (formattedPages.find(function (page) { return page.page_number === currentPreviewPage; }) || formattedPages[0])
+    : null;
+
+  var dimBackdrop = focusActive;
   var dimColor = 'rgba(15,23,42,' + (dimOpacity / 100) + ')';
 
   return (
@@ -330,19 +368,91 @@ export default function FocusModePage({ onBack }) {
             </div>
           </div>
 
-          <div className="flex-1 relative overflow-auto p-8 bg-slate-50 flex justify-center">
+          <div className="flex-1 relative overflow-hidden flex flex-col bg-slate-50">
             {dimBackdrop && (
               <div className="absolute inset-0 pointer-events-none z-10" style={{ backgroundColor: dimColor }} />
             )}
-            <div ref={readerContentRef} className="max-w-[720px] w-full rounded-xl border border-slate-200 shadow-md p-12 bg-white min-h-[300px] relative z-20" style={{ lineHeight: '1.8', fontSize: '16px' }}>
-              {!formattedHtml ? (
-                <div className="text-center text-slate-500 text-sm py-12">
-                  <Crosshair className="w-10 h-10 text-indigo-400 mx-auto mb-3" />
-                  Upload a PDF to activate distraction-free Focus Mode, content spotlighting & backdrop dimming.
-                </div>
-              ) : (
-                <div dangerouslySetInnerHTML={{ __html: formattedHtml }} />
-              )}
+            <div ref={readerContentRef} className="flex-1 overflow-auto p-8 relative z-20">
+              <div className="max-w-[720px] mx-auto rounded-xl border border-slate-200 shadow-md p-12 bg-white min-h-[300px] transition-all" style={{ lineHeight: '1.8', fontSize: '16px' }}>
+                {!formattedHtml ? (
+                  <div className="text-center text-slate-500 text-sm py-12">
+                    <Crosshair className="w-10 h-10 text-indigo-400 mx-auto mb-3" />
+                    Upload a PDF to activate distraction-free Focus Mode, content spotlighting & backdrop dimming.
+                  </div>
+                ) : formattedPages.length > 0 && activePreviewPage ? (
+                  <div className="flex flex-col gap-6 h-full">
+                    <div className="sticky top-0 z-10 flex items-center justify-between rounded-lg border border-slate-200 bg-white/95 px-4 py-2 backdrop-blur-sm shadow-sm" style={{ fontSize: '16px' }}>
+                      <button
+                        onClick={function () { setCurrentPreviewPage(function (prev) { return Math.max(1, prev - 1); }); }}
+                        disabled={currentPreviewPage <= 1}
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700 disabled:opacity-40"
+                      >
+                        <ChevronLeft className="w-4 h-4" /> Prev
+                      </button>
+                      <div className="flex items-center gap-3">
+                        <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Preview Page</span>
+                        <span className="rounded-full bg-slate-800 px-3 py-1 text-[11px] font-semibold text-white">
+                          Page {activePreviewPage.page_number} of {formattedPages.length}
+                        </span>
+                      </div>
+                      <button
+                        onClick={function () { setCurrentPreviewPage(function (prev) { return Math.min(formattedPages.length, prev + 1); }); }}
+                        disabled={currentPreviewPage >= formattedPages.length}
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700 disabled:opacity-40"
+                      >
+                        Next <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <section key={activePreviewPage.page_number} className="bg-transparent focus-container">
+                      <style>{`
+                        .focus-container {
+                          transition: all 0.3s ease;
+                        }
+                        .focus-container p {
+                          transition: all 0.2s ease;
+                          border-radius: 4px;
+                          padding: 2px 4px;
+                          margin: 0 -4px 1.1em -4px !important;
+                        }
+                        
+                        ${focusActive && focusStyle === 'Paragraph Spotlight' ? `
+                          .focus-container p {
+                            opacity: 0.25;
+                            background: transparent !important;
+                          }
+                          .focus-container p:nth-of-type(${activeParaIndex + 1}) {
+                            opacity: 1;
+                            background-color: ${highlightTint} !important;
+                            box-shadow: 0 0 0 4px ${highlightTint};
+                          }
+                        ` : ''}
+                        
+                        ${focusActive && focusStyle === 'Current Page Focus' ? `
+                          .focus-container {
+                            background-color: ${highlightTint} !important;
+                            padding: 20px;
+                            border-radius: 8px;
+                            margin: -20px;
+                          }
+                        ` : ''}
+                        
+                        ${focusActive && focusStyle === 'Focus Frame' ? `
+                          .focus-container {
+                            outline: 8px solid ${highlightTint} !important;
+                            outline-offset: 4px;
+                            border-radius: 4px;
+                            padding: 20px;
+                            margin: -20px;
+                          }
+                        ` : ''}
+                      `}</style>
+                      <div dangerouslySetInnerHTML={{ __html: activePreviewPage.html }} />
+                    </section>
+                  </div>
+                ) : (
+                  <div className="focus-container" dangerouslySetInnerHTML={{ __html: formattedHtml }} />
+                )}
+              </div>
             </div>
           </div>
         </div>

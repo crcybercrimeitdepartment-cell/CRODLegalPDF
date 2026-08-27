@@ -1,4 +1,6 @@
+# pyrefly: ignore [missing-import]
 import cv2
+# pyrefly: ignore [missing-import]
 import numpy as np
 
 def order_points(pts: np.ndarray) -> np.ndarray:
@@ -73,16 +75,17 @@ def detect_perspective_corners(image_bytes: bytes) -> tuple[list, float]:
     pts = best_cnt.reshape(4, 2) * ratio
     rect = order_points(pts)
     
+    # Convert pixel coordinates to fractions
     corners = [
-        {"x": float(rect[0][0]), "y": float(rect[0][1])},
-        {"x": float(rect[1][0]), "y": float(rect[1][1])},
-        {"x": float(rect[2][0]), "y": float(rect[2][1])},
-        {"x": float(rect[3][0]), "y": float(rect[3][1])}
+        {"x": float(rect[0][0]) / orig_width, "y": float(rect[0][1]) / orig_height},
+        {"x": float(rect[1][0]) / orig_width, "y": float(rect[1][1]) / orig_height},
+        {"x": float(rect[2][0]) / orig_width, "y": float(rect[2][1]) / orig_height},
+        {"x": float(rect[3][0]) / orig_width, "y": float(rect[3][1]) / orig_height}
     ]
     
     return corners, best_confidence
 
-def apply_perspective_correction(image_bytes: bytes, corners: list) -> bytes:
+def apply_perspective_correction(image_bytes: bytes, corners: list, ext: str = ".jpg") -> bytes:
     """
     Applies perspective transformation based on 4 corners.
     Corners must be ordered: TL, TR, BR, BL.
@@ -92,11 +95,14 @@ def apply_perspective_correction(image_bytes: bytes, corners: list) -> bytes:
     if image is None:
         raise ValueError("Invalid image data.")
         
+    orig_height, orig_width = image.shape[:2]
+        
+    # Convert fractional coordinates to pixels
     pts = np.array([
-        [corners[0]['x'], corners[0]['y']],
-        [corners[1]['x'], corners[1]['y']],
-        [corners[2]['x'], corners[2]['y']],
-        [corners[3]['x'], corners[3]['y']]
+        [corners[0]['x'] * orig_width, corners[0]['y'] * orig_height],
+        [corners[1]['x'] * orig_width, corners[1]['y'] * orig_height],
+        [corners[2]['x'] * orig_width, corners[2]['y'] * orig_height],
+        [corners[3]['x'] * orig_width, corners[3]['y'] * orig_height]
     ], dtype="float32")
     
     rect = order_points(pts)
@@ -123,12 +129,16 @@ def apply_perspective_correction(image_bytes: bytes, corners: list) -> bytes:
     
     if len(image.shape) == 3 and image.shape[2] == 4:
         warped = cv2.warpPerspective(image, M, (maxWidth, maxHeight), borderMode=cv2.BORDER_TRANSPARENT)
-        success, buffer = cv2.imencode(".png", warped)
     else:
         warped = cv2.warpPerspective(image, M, (maxWidth, maxHeight))
+        
+    if ext.lower() == ".png":
+        success, buffer = cv2.imencode(".png", warped)
+    else:
         success, buffer = cv2.imencode(".jpg", warped, [cv2.IMWRITE_JPEG_QUALITY, 95])
         
     if not success:
         raise RuntimeError("Failed to encode cropped image.")
         
     return buffer.tobytes()
+

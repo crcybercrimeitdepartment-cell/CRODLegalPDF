@@ -98,7 +98,8 @@ export default function AdvancedSearchPage({ onBack }) {
     const minDelay = new Promise(resolve => setTimeout(resolve, 3500));
 
     try {
-      const res = await fetch('/document-management/advanced-search/execute', { method: 'POST', body: fd });
+      const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+      const res = await fetch(`${API_BASE_URL}/api/document-management/advanced-search/execute`, { method: 'POST', body: fd });
       const data = await res.json();
       
       await minDelay;

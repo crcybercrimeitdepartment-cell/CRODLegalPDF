@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BackgroundWatermark } from '../../components/crodlegalpdf';
 import {  ArrowLeft, CloudUpload, Download, Wand2, ChevronLeft, ChevronRight, Keyboard , SlidersHorizontal } from 'lucide-react';
 
-const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '') + '/api/accessibility';
+const API_BASE = (import.meta.env.VITE_API_URL || '') + '/api/accessibility';
 
 const workflowSteps = [
   'Open PDF',
@@ -23,6 +23,7 @@ const SHORTCUTS = [
 ];
 
 export default function KeyboardNavigationPage({ onBack }) {
+  var [pdfFile, setPdfFile] = useState(null);
   var [documentId, setDocumentId] = useState(null);
   var [dragOver, setDragOver] = useState(false);
   var [fileStatus, setFileStatus] = useState('');
@@ -41,6 +42,7 @@ export default function KeyboardNavigationPage({ onBack }) {
   var canvasRef = useRef(null);
   var pdfDocRef = useRef(null);
   var viewportRef = useRef(null);
+  var downloadUrlRef = useRef(null);
 
   var currentStep = !documentId ? 1 : !applied ? 4 : 6;
 
@@ -56,9 +58,11 @@ export default function KeyboardNavigationPage({ onBack }) {
       var data = await res.json();
       if (res.ok) {
         setDocumentId(data.document_id);
-        setTotalPages(data.page_count || 1);
+        setPdfFile(file);
         setCurrentPage(1);
-        setFileStatus('\u2713 Loaded: ' + data.filename + ' (' + (data.page_count || 1) + ' pages)');
+        setApplied(false);
+        setDownloadUrl('');
+        setFileStatus('\u2713 Loaded: ' + file.name + ' (' + (pdfDocRef.current ? pdfDocRef.current.numPages : 1) + ' pages)');
       } else {
         setFileStatus('\u2717 Upload error: ' + (data.error || 'Failed'));
       }
@@ -197,23 +201,30 @@ export default function KeyboardNavigationPage({ onBack }) {
   }, [kbEnabled, nextPage, prevPage, zoomLevel, totalPages, zoomIn, zoomOut, speakFocusedElement, renderPage]);
 
   var processKeyboardNav = useCallback(async function () {
-    if (!documentId) return;
+    if (!pdfFile) return;
     setApplying(true);
     try {
-      var res = await fetch(API_BASE + '/keyboard-nav/' + documentId + '/apply', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (!res.ok) throw new Error('Processing failed');
-      var data = await res.json();
+      if (downloadUrlRef.current) {
+        URL.revokeObjectURL(downloadUrlRef.current);
+      }
+      var objectUrl = URL.createObjectURL(pdfFile);
       setApplied(true);
-      setDownloadUrl(data.download_url || '');
+      downloadUrlRef.current = objectUrl;
+      setDownloadUrl(objectUrl);
     } catch (err) {
       alert('Processing error: ' + err.message);
     } finally {
       setApplying(false);
     }
-  }, [documentId]);
+  }, [pdfFile]);
+
+  useEffect(function () {
+    return function () {
+      if (downloadUrlRef.current) {
+        URL.revokeObjectURL(downloadUrlRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div className="flex-1 flex flex-col w-full h-[calc(100vh-64px)] relative pt-11 sm:pt-4 bg-[#F5F3EC] overflow-hidden px-4 sm:px-8 lg:px-12 pb-4 sm:pb-8 font-sans">
