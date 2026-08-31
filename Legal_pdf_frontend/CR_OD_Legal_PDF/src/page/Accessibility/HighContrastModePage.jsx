@@ -287,7 +287,7 @@ export default function HighContrastModePage({ onBack }) {
     if (!pdfFile) return;
     if (!isSilent) setApplying(true);
     try {
-      var data = await postPdf('/color-contrast', pdfFile);
+      var data = await postPdf('/high-contrast-mode', pdfFile);
       var issues = data && data.color_contrast ? data.color_contrast.issues || [] : [];
       if (issues.length > 0) {
         console.warn('Color contrast issues detected:', issues);

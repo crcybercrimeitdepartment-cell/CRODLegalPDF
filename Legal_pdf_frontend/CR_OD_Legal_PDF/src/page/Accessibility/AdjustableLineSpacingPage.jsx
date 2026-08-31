@@ -86,15 +86,15 @@ export default function AdjustableLineSpacingPage({ onBack }) {
         paragraph_gap_mult: paragraphGap,
         text_color_hex: '#1e293b',
       };
-      var res = await fetch(API_BASE + '/line-spacing/' + documentId + '/preview', {
+      var res = await fetch(API_BASE + '/line-spacing/' + documentId + '/extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error('Preview failed');
       var data = await res.json();
-      setFormattedHtml(data.extracted_html || '');
-      setExtractedPages(Array.isArray(data.extracted_pages) ? data.extracted_pages : []);
+      setFormattedHtml(data.formatted_html || data.extracted_html || '');
+      setExtractedPages(Array.isArray(data.formatted_pages) ? data.formatted_pages : (Array.isArray(data.extracted_pages) ? data.extracted_pages : []));
       setCurrentPreviewPage(1);
       setTotalLines(data.total_lines_count || 0);
       setAppliedMult(data.applied_line_spacing || lineSpacing);
@@ -125,7 +125,7 @@ export default function AdjustableLineSpacingPage({ onBack }) {
         paragraph_gap_mult: paragraphGap,
         text_color_hex: '#1e293b',
       };
-      var res = await fetch(API_BASE + '/line-spacing/' + documentId + '/apply', {
+      var res = await fetch(API_BASE + '/line-spacing/' + documentId + '/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

@@ -86,15 +86,15 @@ export default function AdjustableLetterSpacingPage({ onBack }) {
         line_spacing_mult: lineHeight,
         text_color_hex: '#1e293b',
       };
-      var res = await fetch(API_BASE + '/letter-spacing/' + documentId + '/preview', {
+      var res = await fetch(API_BASE + '/letter-spacing/' + documentId + '/extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error('Preview failed');
       var data = await res.json();
-      setFormattedHtml(data.extracted_html || '');
-      setExtractedPages(Array.isArray(data.extracted_pages) ? data.extracted_pages : []);
+      setFormattedHtml(data.formatted_html || data.extracted_html || '');
+      setExtractedPages(Array.isArray(data.formatted_pages) ? data.formatted_pages : (Array.isArray(data.extracted_pages) ? data.extracted_pages : []));
       setCurrentPreviewPage(1);
       setTotalCharacters(data.total_characters_count || 0);
       setAppliedSpacing(data.applied_letter_spacing || letterSpacing);
@@ -125,7 +125,7 @@ export default function AdjustableLetterSpacingPage({ onBack }) {
         line_spacing_mult: lineHeight,
         text_color_hex: '#1e293b',
       };
-      var res = await fetch(API_BASE + '/letter-spacing/' + documentId + '/apply', {
+      var res = await fetch(API_BASE + '/letter-spacing/' + documentId + '/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -286,7 +286,7 @@ export default function AdjustableLetterSpacingPage({ onBack }) {
 
           <div className="flex-1 overflow-hidden p-8 bg-slate-50">
             <div className="max-w-[720px] h-full max-h-full mx-auto rounded-xl border border-slate-200 shadow-md p-12 bg-white transition-all overflow-y-auto overflow-x-hidden">
-              {!formattedHtml ? (
+              {(!formattedHtml && extractedPages.length === 0) ? (
                 <div className="text-center text-slate-500 text-sm py-12">
                   <FileText className="w-10 h-10 text-indigo-400 mx-auto mb-3" />
                   Upload a PDF to adjust character letter spacing for dyslexia and low-vision clarity.

@@ -86,15 +86,15 @@ export default function CustomFontSizeControlsPage({ onBack }) {
         preserve_heading_scale: preserveHeading,
         text_color_hex: '#1e293b',
       };
-      var res = await fetch(API_BASE + '/font-size-controls/' + documentId + '/preview', {
+      var res = await fetch(API_BASE + '/font-size-controls/' + documentId + '/extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error('Preview failed');
       var data = await res.json();
-      setFormattedHtml(data.extracted_html || '');
-      setExtractedPages(Array.isArray(data.extracted_pages) ? data.extracted_pages : []);
+      setFormattedHtml(data.formatted_html || data.extracted_html || '');
+      setExtractedPages(Array.isArray(data.formatted_pages) ? data.formatted_pages : (Array.isArray(data.extracted_pages) ? data.extracted_pages : []));
       setCurrentPreviewPage(1);
       setTotalSpans(data.total_spans_count || 0);
       setAppliedSize(data.applied_fontsize_pt || fontSize);
@@ -125,7 +125,7 @@ export default function CustomFontSizeControlsPage({ onBack }) {
         preserve_heading_scale: preserveHeading,
         text_color_hex: '#1e293b',
       };
-      var res = await fetch(API_BASE + '/font-size-controls/' + documentId + '/apply', {
+      var res = await fetch(API_BASE + '/font-size-controls/' + documentId + '/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

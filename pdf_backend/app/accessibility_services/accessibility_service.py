@@ -666,29 +666,247 @@ class AccessibilityService:
 
 
     def letter_spacing_extract(self, input_path: str, settings: dict) -> Dict[str, Any]:
-        text = self._extract_all_text(input_path)
-        return {"success": True, "formatted_html": text, "formatted_pages": [], "total_words_count": len(text.split()), "reading_time_minutes": 1}
+        return self.font_size_controls_extract(input_path, settings)
 
     def letter_spacing_export(self, input_path: str, payload: dict) -> Dict[str, Any]:
-        return {"success": True, "download_url": "/api/v1/accessibility/download/dummy.pdf"}
+        import pymupdf
+        import tempfile
+        
+        # Get extracted HTML using the payload settings to apply styles
+        extract_result = self.font_size_controls_extract(input_path, payload)
+        html_pages = extract_result.get("formatted_pages", [])
+        
+        # Get target letter spacing
+        letter_spacing = float(payload.get("letter_spacing_em", 0.05))
+        text_color = payload.get("text_color_hex", "#000000")
+        
+        # CSS to adjust letter spacing
+        css = f"""
+        body {{ font-family: sans-serif; font-size: 14pt; color: {text_color}; letter-spacing: {letter_spacing}em; line-height: 1.5; }}
+        h1 {{ font-size: 20pt; margin-bottom: 1em; letter-spacing: {letter_spacing}em; }}
+        h2 {{ font-size: 18pt; margin-bottom: 1em; letter-spacing: {letter_spacing}em; }}
+        h3 {{ font-size: 16pt; margin-bottom: 1em; letter-spacing: {letter_spacing}em; }}
+        """
+        
+        body_content = ""
+        for p in html_pages:
+            body_content += f'<div style="page-break-after: always;">{p["html"]}</div>'
+            
+        full_html = f"<html><head><style>{css}</style></head><body>{body_content}</body></html>"
+        
+        import os
+        from uuid import uuid4
+        import tempfile
+        import subprocess
+        os.makedirs(os.path.join(tempfile.gettempdir(), "legal_pdf_exports"), exist_ok=True)
+        html_path = os.path.join(tempfile.gettempdir(), "legal_pdf_exports", f"temp_{uuid4().hex}.html")
+        temp_path = os.path.join(tempfile.gettempdir(), "legal_pdf_exports", f"exported_{uuid4().hex}.pdf")
+        
+        with open(html_path, "w", encoding="utf-8") as f:
+            f.write(full_html)
+            
+        script_path = os.path.join(os.path.dirname(__file__), "pdf_exporter.py")
+        import sys
+        subprocess.run([sys.executable, script_path, html_path, temp_path], check=True)
+        
+        
+        return {"success": True, "output_path": temp_path}
 
     def line_spacing_extract(self, input_path: str, settings: dict) -> Dict[str, Any]:
-        text = self._extract_all_text(input_path)
-        return {"success": True, "formatted_html": text, "formatted_pages": [], "total_words_count": len(text.split()), "reading_time_minutes": 1}
+        # The extraction logic (parsing to semantic HTML blocks) is identical
+        return self.font_size_controls_extract(input_path, settings)
 
     def line_spacing_export(self, input_path: str, payload: dict) -> Dict[str, Any]:
-        return {"success": True, "download_url": "/api/v1/accessibility/download/dummy.pdf"}
+        import pymupdf
+        import tempfile
+        
+        # Get extracted HTML using the payload settings to apply styles
+        extract_result = self.font_size_controls_extract(input_path, payload)
+        html_pages = extract_result.get("formatted_pages", [])
+        
+        # Get target line spacing and gap
+        line_spacing = float(payload.get("line_spacing_mult", 1.4))
+        paragraph_gap = float(payload.get("paragraph_gap_mult", 1.5))
+        text_color = payload.get("text_color_hex", "#000000")
+        
+        # CSS to adjust line spacing
+        css = f"""
+        body {{ font-family: sans-serif; font-size: 14pt; color: {text_color}; line-height: {line_spacing}; }}
+        h1 {{ font-size: 20pt; margin-bottom: {paragraph_gap}em; }}
+        h2 {{ font-size: 18pt; margin-bottom: {paragraph_gap}em; }}
+        h3 {{ font-size: 16pt; margin-bottom: {paragraph_gap}em; }}
+        p {{ margin-bottom: {paragraph_gap}em; }}
+        div {{ margin-bottom: {paragraph_gap}em; }}
+        """
+        
+        body_content = ""
+        for p in html_pages:
+            body_content += f'<div style="page-break-after: always;">{p["html"]}</div>'
+            
+        full_html = f"<html><head><style>{css}</style></head><body>{body_content}</body></html>"
+        
+        import os
+        from uuid import uuid4
+        import tempfile
+        import subprocess
+        os.makedirs(os.path.join(tempfile.gettempdir(), "legal_pdf_exports"), exist_ok=True)
+        html_path = os.path.join(tempfile.gettempdir(), "legal_pdf_exports", f"temp_{uuid4().hex}.html")
+        temp_path = os.path.join(tempfile.gettempdir(), "legal_pdf_exports", f"exported_{uuid4().hex}.pdf")
+        
+        with open(html_path, "w", encoding="utf-8") as f:
+            f.write(full_html)
+            
+        script_path = os.path.join(os.path.dirname(__file__), "pdf_exporter.py")
+        import sys
+        subprocess.run([sys.executable, script_path, html_path, temp_path], check=True)
+        
+            
+        return {"success": True, "output_path": temp_path}
 
     def font_size_controls_extract(self, input_path: str, settings: dict) -> Dict[str, Any]:
-        text = self._extract_all_text(input_path)
-        return {"success": True, "formatted_html": text, "formatted_pages": [], "total_words_count": len(text.split()), "reading_time_minutes": 1}
+        import pymupdf
+        doc = pymupdf.open(input_path)
+        formatted_pages = []
+        total_words = 0
+        
+        # Get settings with defaults
+        line_spacing = settings.get("line_spacing_mult", 1.5)
+        paragraph_gap = settings.get("paragraph_gap_mult", 1.0)
+        font_size_mult = settings.get("font_size_mult", 1.0)
+        letter_spacing = settings.get("letter_spacing_em", 0.0)
+        
+        for idx, page in enumerate(doc):
+            page_html = []
+            blocks = page.get_text('dict').get('blocks', [])
+            
+            # If no blocks found or it's empty, fallback to simple text extraction
+            has_text = False
+            for b in blocks:
+                if b.get('type') == 0:
+                    lines_html = []
+                    max_size_for_block = 0
+                    for line in b.get('lines', []):
+                        line_text = ''
+                        for span in line.get('spans', []):
+                            line_text += span.get('text', '')
+                            if span.get('size', 0) > max_size_for_block:
+                                max_size_for_block = span.get('size', 0)
+                        lines_html.append(line_text.strip())
+                    
+                    block_text = "<br>".join(lines_html).strip()
+                    if block_text:
+                        has_text = True
+                        total_words += len(block_text.replace("<br>", " ").split())
+                        tag = 'p'
+                        base_size = 1.0
+                        if max_size_for_block > 14: 
+                            tag = 'h3'
+                            base_size = 1.2
+                        if max_size_for_block > 18: 
+                            tag = 'h2'
+                            base_size = 1.5
+                        if max_size_for_block > 22: 
+                            tag = 'h1'
+                            base_size = 2.0
+                        
+                        final_size = base_size * float(font_size_mult)
+                        page_html.append(f'<{tag} style="margin-bottom: {paragraph_gap}em; line-height: {line_spacing}; font-size: {final_size}em; letter-spacing: {letter_spacing}em;">{block_text}</{tag}>')
+                elif b.get('type') == 1:
+                    # Image block
+                    import base64
+                    img_bytes = b.get("image")
+                    ext = b.get("ext", "png")
+                    if img_bytes:
+                        base64_str = base64.b64encode(img_bytes).decode('utf-8')
+                        page_html.append(f'<div style="text-align: center; margin-bottom: {paragraph_gap}em;"><img src="data:image/{ext};base64,{base64_str}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);" /></div>')
+            
+            if not has_text:
+                # Fallback to plain text lines
+                raw_text = page.get_text("text")
+                for line in raw_text.split('\n'):
+                    line = line.strip()
+                    if line:
+                        total_words += len(line.split())
+                        final_size = 1.0 * float(font_size_mult)
+                        page_html.append(f'<p style="margin-bottom: {paragraph_gap}em; line-height: {line_spacing}; font-size: {final_size}em; letter-spacing: {letter_spacing}em;">{line}</p>')
+
+            formatted_pages.append({
+                "page_number": idx + 1,
+                "html": "".join(page_html)
+            })
+        
+        doc.close()
+        full_html = "".join([p["html"] for p in formatted_pages])
+        
+        # Ultimate fallback
+        if not full_html:
+            full_html = "<p>Could not extract text blocks from this PDF. Please try another file.</p>"
+            if len(formatted_pages) > 0:
+                formatted_pages[0]["html"] = full_html
+        return {
+            "success": True, 
+            "formatted_html": full_html, 
+            "formatted_pages": formatted_pages, 
+            "total_words_count": total_words, 
+            "reading_time_minutes": max(1, total_words // 200)
+        }
 
     def font_size_controls_export(self, input_path: str, payload: dict) -> Dict[str, Any]:
-        return {"success": True, "download_url": "/api/v1/accessibility/download/dummy.pdf"}
+        import pymupdf
+        import tempfile
+        
+        # Get extracted HTML using the payload settings to apply styles
+        extract_result = self.font_size_controls_extract(input_path, payload)
+        html_pages = extract_result.get("formatted_pages", [])
+        
+        # Get target font size
+        target_size = int(payload.get("target_fontsize_pt", 20))
+        text_color = payload.get("text_color_hex", "#000000")
+        
+        # Calculate new font sizes
+        base_pt = 14 * float(font_size_mult)
+        h1_pt = 20 * float(font_size_mult)
+        h2_pt = 18 * float(font_size_mult)
+        h3_pt = 16 * float(font_size_mult)
+        
+        # CSS to adjust font sizes
+        css = f"""
+        body {{ font-family: sans-serif; font-size: {base_pt}pt; color: {text_color}; line-height: 1.5; }}
+        h1 {{ font-size: {h1_pt}pt; margin-bottom: 1em; }}
+        h2 {{ font-size: {h2_pt}pt; margin-bottom: 1em; }}
+        h3 {{ font-size: {h3_pt}pt; margin-bottom: 1em; }}
+        """
+        
+        body_content = ""
+        for p in html_pages:
+            body_content += f'<div style="page-break-after: always;">{p["html"]}</div>'
+            
+        full_html = f"<html><head><style>{css}</style></head><body>{body_content}</body></html>"
+        
+        import os
+        from uuid import uuid4
+        import tempfile
+        import subprocess
+        os.makedirs(os.path.join(tempfile.gettempdir(), "legal_pdf_exports"), exist_ok=True)
+        html_path = os.path.join(tempfile.gettempdir(), "legal_pdf_exports", f"temp_{uuid4().hex}.html")
+        temp_path = os.path.join(tempfile.gettempdir(), "legal_pdf_exports", f"exported_{uuid4().hex}.pdf")
+        
+        with open(html_path, "w", encoding="utf-8") as f:
+            f.write(full_html)
+            
+        script_path = os.path.join(os.path.dirname(__file__), "pdf_exporter.py")
+        import sys
+        subprocess.run([sys.executable, script_path, html_path, temp_path], check=True)
+        
+            
+        return {"success": True, "output_path": temp_path}
 
     def dyslexia_mode_extract(self, input_path: str, settings: dict) -> Dict[str, Any]:
         text = self._extract_all_text(input_path)
         return {"success": True, "formatted_html": text, "formatted_pages": [], "total_words_count": len(text.split()), "reading_time_minutes": 1}
+
+    def dyslexia_mode_export(self, input_path: str, settings: dict) -> Dict[str, Any]:
+        return {"success": True, "download_url": "/api/accessibility/dummy/download"}
 
     def focus_mode_extract(self, input_path: str, settings: dict) -> Dict[str, Any]:
         text = self._extract_all_text(input_path)
